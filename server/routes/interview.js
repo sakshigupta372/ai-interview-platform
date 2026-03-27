@@ -11,13 +11,13 @@ const MAX_QUESTIONS = 5;
 // 1. START INTERVIEW SESSION 
 router.post("/start", async (req, res) => {
   try {
-    const { role } = req.body;
+    const { role, clerkId } = req.body;
     if (!role) {
       return res.status(400).json({ error: "Role is required" });
     }
 
     const question = await generateQuestion(role);
-    const session = await sessionService.createSession(role);
+    const session = await sessionService.createSession(role, clerkId);
     await sessionService.updateCurrentQuestion(session.sessionId, question);
 
     res.json({
@@ -117,6 +117,17 @@ router.get("/session/:id", async (req, res) => {
     res.json(session);
   } catch (error) {
     res.status(500).json({ error: "Database fetch failed" });
+  }
+});
+
+// 4. GET ALL SESSIONS BY USER (CLERK ID)
+router.get("/user/:clerkId", async (req, res) => {
+  try {
+    const sessions = await sessionService.getSessionsByUser(req.params.clerkId);
+    res.json(sessions);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Failed to fetch user profiles" });
   }
 });
 

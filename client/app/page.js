@@ -3,7 +3,8 @@
 import { useState, useEffect, useRef } from "react";
 import axios from "axios";
 import { motion, AnimatePresence } from "framer-motion";
-import { Loader2, Send, BrainCircuit, Timer, Zap, ShieldAlert, CheckCircle2, ChevronRight, BarChart3, Mic, MicOff, Volume2, UserCog, Rocket, Building2, Lightbulb, UserRound, ArrowRight } from "lucide-react";
+import { Loader2, Zap, BrainCircuit, Timer, ShieldAlert, ChevronRight, BarChart3, Mic, MicOff, Volume2, UserCog, Rocket, Building2, Lightbulb, Target, Download, Brain, Activity } from "lucide-react";
+import { useAuth, SignInButton, UserButton } from "@clerk/nextjs";
 
 const TypewriterText = ({ text, delay = 15, onComplete }) => {
   const [displayedContent, setDisplayedContent] = useState("");
@@ -26,6 +27,8 @@ const TypewriterText = ({ text, delay = 15, onComplete }) => {
 };
 
 export default function Home() {
+  const { userId, isLoaded } = useAuth(); // Grab active user ID directly from Clerk
+  
   const [stage, setStage] = useState("role-selection");
   const [role, setRole] = useState("");
   const [persona, setPersona] = useState("Harsh Tech Lead"); 
@@ -160,7 +163,10 @@ export default function Home() {
     const complexRoleContext = `A ${persona} acting as a ${interviewType} interviewer at ${company}, interviewing a candidate for a ${role} position. Format strictly.`;
 
     try {
-      const res = await axios.post("http://localhost:5000/interview/start", { role: complexRoleContext });
+      const res = await axios.post("http://localhost:5000/interview/start", { 
+        role: complexRoleContext,
+        clerkId: userId || null 
+      });
       setSessionId(res.data.sessionId);
       setCurrentQuestion(res.data.question);
       setChatHistory([{ role: "ai", text: res.data.question, isInitial: true }]);
@@ -249,6 +255,26 @@ export default function Home() {
   return (
     <div className="min-h-screen relative overflow-x-hidden text-slate-100 flex flex-col justify-center items-center font-sans z-0">
       
+      {/* --- GLOBAL AUTH HEADER --- */}
+      <nav className="absolute top-0 right-0 p-6 z-50 flex items-center gap-4 w-full justify-between sm:justify-end">
+         <div className="sm:hidden text-cyan-400 font-bold tracking-widest text-lg pl-2">NEXUS</div>
+         <div className="flex items-center gap-4">
+           {isLoaded && !userId && (
+             <div className="bg-gradient-to-r from-cyan-500 to-purple-600 hover:from-cyan-400 hover:to-purple-500 text-white font-bold py-2 px-6 rounded-xl transition-all shadow-[0_0_20px_rgba(34,211,238,0.3)] cursor-pointer text-sm">
+               <SignInButton mode="modal" fallbackRedirectUrl="/profile" />
+             </div>
+           )}
+           {isLoaded && userId && (
+             <>
+               <button onClick={() => window.location.href='/profile'} className="text-cyan-400 font-mono text-xs border border-cyan-500/50 hover:bg-cyan-500/10 px-4 py-2 rounded-lg transition-all hidden sm:block">
+                 View Session History
+               </button>
+               <UserButton appearance={{ elements: { avatarBox: "w-10 h-10 border-2 border-purple-500 shadow-[0_0_15px_rgba(192,132,252,0.4)]" } }} />
+             </>
+           )}
+         </div>
+      </nav>
+
       <div className="absolute inset-0 z-[-2]">
          <div className="cyberpunk-bg opacity-30"></div>
          <div className="absolute top-0 w-full h-[60%] bg-gradient-to-b from-[#020617] to-transparent z-10" />
@@ -352,10 +378,12 @@ export default function Home() {
                   whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}
                   onClick={() => startInterview()}
-                  disabled={!role || isTyping}
+                  disabled={!role || isTyping || !userId}
                   className="w-full bg-gradient-to-r from-cyan-500 to-purple-600 hover:from-cyan-400 hover:to-purple-500 text-white font-bold py-5 rounded-xl flex items-center justify-center gap-2 transition-all shadow-[0_0_30px_rgba(192,132,252,0.4)] disabled:opacity-50 tracking-widest uppercase text-xs"
                 >
-                  {isTyping ? <Loader2 className="animate-spin" /> : <><Mic className="w-4 h-4 fill-current/30" /> Boot Voice Simulation</>}
+                  {isTyping ? <Loader2 className="animate-spin" /> : 
+                   !userId ? <><ShieldAlert className="w-4 h-4" /> Please Sign In to Access Simulation Database</> :
+                   <><Mic className="w-4 h-4 fill-current/30" /> Boot Voice Simulation</>}
                 </motion.button>
               </div>
             </motion.div>
@@ -480,9 +508,9 @@ export default function Home() {
                    <div className="px-6 py-2 bg-[#020617] text-[10px] text-cyan-300/60 font-mono flex items-center gap-2 border-t border-slate-800">
                       <Lightbulb className="w-3 h-3 text-amber-400" /> 
                       <span>SUGGESTED FORMAT:</span>
-                      {interviewType === "Technical" && <span className="bg-slate-800 px-2 py-0.5 rounded">1. Core Concept</span> <span className="bg-slate-800 px-2 py-0.5 rounded">2. Technical Implementation</span> <span className="bg-slate-800 px-2 py-0.5 rounded">3. Edge Cases / Scaling</span>}
-                      {interviewType === "System Design" && <span className="bg-slate-800 px-2 py-0.5 rounded">1. Requirements</span> <span className="bg-slate-800 px-2 py-0.5 rounded">2. High-Level Arch</span> <span className="bg-slate-800 px-2 py-0.5 rounded">3. Database / Bottlenecks</span>}
-                      {interviewType === "HR & Culture" && <span className="bg-slate-800 px-2 py-0.5 rounded">1. Situation</span> <span className="bg-slate-800 px-2 py-0.5 rounded">2. Task/Action</span> <span className="bg-slate-800 px-2 py-0.5 rounded">3. Measured Result (STAR)</span>}
+                      {interviewType === "Technical" && <><span className="bg-slate-800 px-2 py-0.5 rounded">1. Core Concept</span> <span className="bg-slate-800 px-2 py-0.5 rounded">2. Technical Implementation</span> <span className="bg-slate-800 px-2 py-0.5 rounded">3. Edge Cases / Scaling</span></>}
+                      {interviewType === "System Design" && <><span className="bg-slate-800 px-2 py-0.5 rounded">1. Requirements</span> <span className="bg-slate-800 px-2 py-0.5 rounded">2. High-Level Arch</span> <span className="bg-slate-800 px-2 py-0.5 rounded">3. Database / Bottlenecks</span></>}
+                      {interviewType === "HR & Culture" && <><span className="bg-slate-800 px-2 py-0.5 rounded">1. Situation</span> <span className="bg-slate-800 px-2 py-0.5 rounded">2. Task/Action</span> <span className="bg-slate-800 px-2 py-0.5 rounded">3. Measured Result (STAR)</span></>}
                    </div>
                 )}
 

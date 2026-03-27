@@ -1,10 +1,11 @@
 const { v4: uuidv4 } = require("uuid");
 const SessionModel = require("../models/session.model");
 
-async function createSession(role) {
+async function createSession(role, clerkId = null) {
   const sessionId = uuidv4();
   const session = new SessionModel({
     sessionId,
+    clerkId,
     role,
     history: [],
     status: "active",
@@ -58,4 +59,8 @@ async function endSession(sessionId) {
   );
 }
 
-module.exports = { createSession, getSession, updateSessionData, updateCurrentQuestion, endSession };
+async function getSessionsByUser(clerkId) {
+  return await SessionModel.find({ clerkId }).sort({ createdAt: -1 });
+}
+
+module.exports = { createSession, getSession, updateSessionData, updateCurrentQuestion, endSession, getSessionsByUser };
