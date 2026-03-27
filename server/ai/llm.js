@@ -1,9 +1,17 @@
 const { GoogleGenAI } = require("@google/genai");
 
-// Initialize Google Gen AI
-const ai = new GoogleGenAI({});
+// Default AI instance using the platform's own env key (fallback)
+const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
-async function generateQuestion(role) {
+// Returns an AI instance using the user's own key if provided, else falls back to platform key
+function getAI(userApiKey) {
+  if (userApiKey && userApiKey.trim().length > 10) {
+    return new GoogleGenAI({ apiKey: userApiKey.trim() });
+  }
+  return ai;
+}
+
+async function generateQuestion(role, userApiKey) {
   const prompt = `
 You are a senior interviewer.
 Ask a technical interview question for a ${role}.
@@ -11,11 +19,11 @@ Keep it realistic and not too easy. Do not include any extra text, just the ques
 `;
 
   try {
-    const response = await ai.models.generateContent({
+    const client = getAI(userApiKey);
+    const response = await client.models.generateContent({
       model: "gemini-2.5-flash",
       contents: prompt,
     });
-    
     return response.text.trim();
   } catch (error) {
     console.error("AI Error:", error);
@@ -23,4 +31,4 @@ Keep it realistic and not too easy. Do not include any extra text, just the ques
   }
 }
 
-module.exports = { generateQuestion, ai };
+module.exports = { generateQuestion, ai, getAI };

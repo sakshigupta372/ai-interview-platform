@@ -97,6 +97,7 @@ export default function Home() {
   const [timerMode, setTimerMode] = useState("Pressure Mode");
 
   const [sessionId, setSessionId] = useState("");
+  const [userApiKey, setUserApiKey] = useState("");
   const [currentDifficulty, setCurrentDifficulty] = useState("Medium");
   const [strengths, setStrengths] = useState([]);
   const [weaknesses, setWeaknesses] = useState([]);
@@ -167,7 +168,7 @@ export default function Home() {
     setIsTyping(true); setStage("interview");
     const ctx = `A ${persona} acting as a ${interviewType} interviewer at ${company}, for a ${role} position.`;
     try {
-      const res = await axios.post("http://localhost:5000/interview/start", { role: ctx, clerkId: userId });
+      const res = await axios.post("http://localhost:5000/interview/start", { role: ctx, clerkId: userId, userApiKey });
       setSessionId(res.data.sessionId);
       setChatHistory([{ role: "ai", text: res.data.question, isInitial: true }]);
       setCurrentDifficulty("Medium"); speak(res.data.question);
@@ -184,7 +185,7 @@ export default function Home() {
     setChatHistory(hist); setAnswer(""); setIsTyping(true);
     setTimeout(() => setIsAdjusting(true), 1200);
     try {
-      const res = await axios.post("http://localhost:5000/interview/answer", { sessionId, answer: userAns });
+      const res = await axios.post("http://localhost:5000/interview/answer", { sessionId, answer: userAns, userApiKey });
       const updated = [...hist];
       updated[updated.length - 1].evaluation = res.data.evaluation;
       if (res.data.sessionSummary) {
@@ -269,6 +270,22 @@ export default function Home() {
                   ))}
                 </div>
 
+                {/* API Key Input */}
+                <div style={{ marginBottom: 16 }}>
+                  <span style={{ ...label, display: "flex", alignItems: "center", gap: 6 }}>🔑 Your Gemini API Key <span style={{ color: "rgba(255,255,255,0.2)", fontWeight: 400, letterSpacing: 0, textTransform: "none" }}>(free at aistudio.google.com)</span></span>
+                  <input
+                    type="password"
+                    value={userApiKey}
+                    onChange={e => setUserApiKey(e.target.value)}
+                    placeholder="Paste your Gemini API key here..."
+                    style={{ ...inputStyle, fontSize: 12, padding: "11px 14px", fontFamily: "monospace", letterSpacing: "0.05em" }}
+                  />
+                  <p style={{ fontSize: 10, color: "rgba(255,255,255,0.22)", marginTop: 6, lineHeight: 1.5 }}>
+                    Your key is never stored — it's only used for your session. Get a free key at{" "}
+                    <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noreferrer" style={{ color: "rgba(255,255,255,0.5)", textDecoration: "underline" }}>aistudio.google.com</a>
+                  </p>
+                </div>
+
                 {/* Role input */}
                 <input
                   type="text" value={role}
@@ -279,11 +296,14 @@ export default function Home() {
                 />
 
                 {/* CTA */}
-                <button onClick={startInterview} disabled={!role || isTyping || !userId}
-                  style={{ width: "100%", padding: "14px 0", borderRadius: 11, border: "none", cursor: (!role || !userId || isTyping) ? "not-allowed" : "pointer", background: (!role || !userId || isTyping) ? "rgba(255,255,255,0.1)" : "#fff", color: (!role || !userId || isTyping) ? "rgba(255,255,255,0.35)" : "#000", fontWeight: 700, fontSize: 12, letterSpacing: "0.1em", textTransform: "uppercase", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, transition: "all .2s" }}>
+                <button
+                  onClick={startInterview}
+                  disabled={!role || isTyping || !userId || !userApiKey}
+                  style={{ width: "100%", padding: "14px 0", borderRadius: 11, border: "none", cursor: (!role || !userId || isTyping || !userApiKey) ? "not-allowed" : "pointer", background: (!role || !userId || isTyping || !userApiKey) ? "rgba(255,255,255,0.1)" : "#fff", color: (!role || !userId || isTyping || !userApiKey) ? "rgba(255,255,255,0.35)" : "#000", fontWeight: 700, fontSize: 12, letterSpacing: "0.1em", textTransform: "uppercase", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, transition: "all .2s" }}>
                   {isTyping ? <Loader2 size={15} style={{ animation: "spin 1s linear infinite" }} /> :
                     !userId ? <><ShieldAlert size={14} /> Sign in to access</> :
-                      <><Rocket size={14} /> Start Simulation</>}
+                    !userApiKey ? <><span style={{ fontSize: 13 }}>🔑</span> Enter your Gemini API key</> :
+                    <><Rocket size={14} /> Start Simulation</>}
                 </button>
               </div>
             </motion.div>

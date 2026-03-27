@@ -1,6 +1,6 @@
-const { ai } = require("./llm");
+const { getAI } = require("./llm");
 
-async function generateFollowUp(role, previousQuestion, userAnswer, evaluationScore, difficulty) {
+async function generateFollowUp(role, previousQuestion, userAnswer, evaluationScore, difficulty, userApiKey = null) {
   const prompt = `
 You are an adaptive expert interviewer interviewing a candidate for a ${role} position.
 
@@ -20,7 +20,8 @@ Next Question:
 `;
 
   try {
-    const response = await ai.models.generateContent({
+    const client = getAI(userApiKey);
+    const response = await client.models.generateContent({
       model: "gemini-2.5-flash",
       contents: prompt,
     });

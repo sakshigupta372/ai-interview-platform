@@ -11,12 +11,12 @@ const MAX_QUESTIONS = 5;
 // 1. START INTERVIEW SESSION 
 router.post("/start", async (req, res) => {
   try {
-    const { role, clerkId } = req.body;
+    const { role, clerkId, userApiKey } = req.body;
     if (!role) {
       return res.status(400).json({ error: "Role is required" });
     }
 
-    const question = await generateQuestion(role);
+    const question = await generateQuestion(role, userApiKey);
     const session = await sessionService.createSession(role, clerkId);
     await sessionService.updateCurrentQuestion(session.sessionId, question);
 
@@ -34,7 +34,7 @@ router.post("/start", async (req, res) => {
 // 2. SUBMIT ANSWER, EVALUATE & NEXT 
 router.post("/answer", async (req, res) => {
   try {
-    const { sessionId, answer } = req.body;
+    const { sessionId, answer, userApiKey } = req.body;
 
     if (!sessionId || !answer) {
       return res.status(400).json({ error: "sessionId and answer are required" });
@@ -53,7 +53,7 @@ router.post("/answer", async (req, res) => {
     const currentDifficulty = session.currentDifficulty || "Medium";
 
     // 2. Ask Brain 2 (Evaluator) to score the answer and adapt difficulty
-    const evaluation = await evaluateAnswer(questionTheyAreAnswering, answer, currentDifficulty);
+    const evaluation = await evaluateAnswer(questionTheyAreAnswering, answer, currentDifficulty, userApiKey);
 
     // 3. Save Q&A and Strengths/Weaknesses to MongoDB
     await sessionService.updateSessionData(
@@ -86,7 +86,8 @@ router.post("/answer", async (req, res) => {
       questionTheyAreAnswering, 
       answer, 
       evaluation.score,
-      updatedSession.currentDifficulty // Pass the dynamically adjusted difficulty
+      updatedSession.currentDifficulty,
+      userApiKey
     );
 
     // Update session state in DB
