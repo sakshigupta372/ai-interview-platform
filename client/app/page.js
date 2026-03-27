@@ -90,6 +90,8 @@ export default function Home() {
   const { userId, isLoaded } = useAuth();
 
   const [stage, setStage] = useState("role-selection");
+  const [apiKeyInput, setApiKeyInput] = useState("");
+  const [apiKeyError, setApiKeyError] = useState("");
   const [role, setRole] = useState("");
   const [persona, setPersona] = useState("Harsh Tech Lead");
   const [company, setCompany] = useState("Agnostic");
@@ -98,6 +100,20 @@ export default function Home() {
 
   const [sessionId, setSessionId] = useState("");
   const [userApiKey, setUserApiKey] = useState("");
+
+  // After Clerk loads and user is signed in, check if we already have their key in sessionStorage.
+  // If not, redirect them to the API Key entry screen.
+  useEffect(() => {
+    if (!isLoaded) return;
+    if (userId) {
+      const saved = sessionStorage.getItem("nexus_gemini_key");
+      if (saved) {
+        setUserApiKey(saved);
+      } else {
+        setStage("api-key");
+      }
+    }
+  }, [isLoaded, userId]);
   const [currentDifficulty, setCurrentDifficulty] = useState("Medium");
   const [strengths, setStrengths] = useState([]);
   const [weaknesses, setWeaknesses] = useState([]);
@@ -228,6 +244,76 @@ export default function Home() {
       <main style={{ position: "relative", zIndex: 10, minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", padding: "80px 24px 40px" }}>
         <AnimatePresence mode="wait">
 
+          {/* ══ API KEY GATE ═══════════════════════════════════════════════════ */}
+          {stage === "api-key" && (
+            <motion.div key="api-key"
+              initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }} transition={{ duration: 0.4 }}
+              style={{ width: "100%", maxWidth: 460 }}
+            >
+              <div style={{ ...panel, padding: "44px 40px", textAlign: "center" }}>
+                {/* Icon */}
+                <div style={{ width: 64, height: 64, borderRadius: 20, background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.12)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 24px", fontSize: 28 }}>
+                  🔑
+                </div>
+
+                <h2 style={{ fontSize: 24, fontWeight: 900, margin: "0 0 8px", letterSpacing: "-0.02em" }}>Connect Your AI</h2>
+                <p style={{ fontSize: 13, color: "rgba(255,255,255,0.38)", lineHeight: 1.6, margin: "0 0 32px" }}>
+                  Paste your free Gemini API key to power your interview simulation.<br />
+                  Your key is <strong style={{ color: "rgba(255,255,255,0.6)" }}>never stored</strong> on our servers.
+                </p>
+
+                {/* Key Input */}
+                <input
+                  type="password"
+                  value={apiKeyInput}
+                  onChange={e => { setApiKeyInput(e.target.value); setApiKeyError(""); }}
+                  onKeyDown={e => {
+                    if (e.key === "Enter") {
+                      if (apiKeyInput.trim().length < 10) { setApiKeyError("That doesn't look like a valid API key."); return; }
+                      sessionStorage.setItem("nexus_gemini_key", apiKeyInput.trim());
+                      setUserApiKey(apiKeyInput.trim());
+                      setStage("role-selection");
+                    }
+                  }}
+                  placeholder="AIzaSy..."
+                  style={{ ...inputStyle, textAlign: "center", fontSize: 13, padding: "14px 16px", fontFamily: "monospace", letterSpacing: "0.06em", marginBottom: 8 }}
+                  autoFocus
+                />
+                {apiKeyError && <p style={{ fontSize: 11, color: "rgba(255,80,80,0.85)", marginBottom: 12 }}>{apiKeyError}</p>}
+
+                {/* CTA */}
+                <button
+                  onClick={() => {
+                    if (apiKeyInput.trim().length < 10) { setApiKeyError("That doesn't look like a valid API key."); return; }
+                    sessionStorage.setItem("nexus_gemini_key", apiKeyInput.trim());
+                    setUserApiKey(apiKeyInput.trim());
+                    setStage("role-selection");
+                  }}
+                  style={{ width: "100%", padding: "14px 0", borderRadius: 11, border: "none", cursor: apiKeyInput.trim().length > 10 ? "pointer" : "not-allowed", background: apiKeyInput.trim().length > 10 ? "#fff" : "rgba(255,255,255,0.1)", color: apiKeyInput.trim().length > 10 ? "#000" : "rgba(255,255,255,0.3)", fontWeight: 700, fontSize: 12, letterSpacing: "0.1em", textTransform: "uppercase", transition: "all .2s", marginBottom: 20 }}>
+                  Activate Simulation Engine →
+                </button>
+
+                {/* Helper link */}
+                <p style={{ fontSize: 11, color: "rgba(255,255,255,0.2)", lineHeight: 1.6 }}>
+                  Don't have one?{" "}
+                  <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noreferrer"
+                    style={{ color: "rgba(255,255,255,0.5)", textDecoration: "underline" }}>
+                    Get a free key at aistudio.google.com
+                  </a>
+                  {" "}— 1,500 requests/day, no credit card.
+                </p>
+
+                {/* Reassurance badges */}
+                <div style={{ display: "flex", justifyContent: "center", gap: 16, marginTop: 20 }}>
+                  {["🔒 Client-side only", "🚫 Never logged", "♻️ Cached for session"].map(t => (
+                    <span key={t} style={{ fontSize: 10, color: "rgba(255,255,255,0.2)", fontFamily: "monospace" }}>{t}</span>
+                  ))}
+                </div>
+              </div>
+            </motion.div>
+          )}
+
           {/* ══ SETUP ══════════════════════════════════════════════════════════ */}
           {stage === "role-selection" && (
             <motion.div key="setup"
@@ -268,22 +354,6 @@ export default function Home() {
                       </select>
                     </div>
                   ))}
-                </div>
-
-                {/* API Key Input */}
-                <div style={{ marginBottom: 16 }}>
-                  <span style={{ ...label, display: "flex", alignItems: "center", gap: 6 }}>🔑 Your Gemini API Key <span style={{ color: "rgba(255,255,255,0.2)", fontWeight: 400, letterSpacing: 0, textTransform: "none" }}>(free at aistudio.google.com)</span></span>
-                  <input
-                    type="password"
-                    value={userApiKey}
-                    onChange={e => setUserApiKey(e.target.value)}
-                    placeholder="Paste your Gemini API key here..."
-                    style={{ ...inputStyle, fontSize: 12, padding: "11px 14px", fontFamily: "monospace", letterSpacing: "0.05em" }}
-                  />
-                  <p style={{ fontSize: 10, color: "rgba(255,255,255,0.22)", marginTop: 6, lineHeight: 1.5 }}>
-                    Your key is never stored — it's only used for your session. Get a free key at{" "}
-                    <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noreferrer" style={{ color: "rgba(255,255,255,0.5)", textDecoration: "underline" }}>aistudio.google.com</a>
-                  </p>
                 </div>
 
                 {/* Role input */}
