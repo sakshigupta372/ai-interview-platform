@@ -2,10 +2,11 @@
 
 import { useEffect, useState } from "react";
 import axios from "axios";
-import { useAuth, UserProfile, UserButton } from "@clerk/nextjs";
-import { BackgroundLines } from "@/components/ui/background-lines"; // Assuming they don't have this, I will just use standard styles
-import { Rocket, Target, ArrowLeft, BarChart3, Clock, Database, BrainCircuit, Activity } from "lucide-react";
+import { useAuth, UserButton } from "@clerk/nextjs";
+import { Rocket, Target, ArrowLeft, BarChart3, BrainCircuit, Activity, Database } from "lucide-react";
 import { motion } from "framer-motion";
+
+const panel = { background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 20, backdropFilter: "blur(20px)" };
 
 export default function Profile() {
   const { userId, isLoaded } = useAuth();
@@ -14,166 +15,148 @@ export default function Profile() {
 
   useEffect(() => {
     if (!isLoaded || !userId) return;
-    
     axios.get(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000"}/interview/user/${userId}`)
-      .then(res => {
-        setSessions(res.data);
-      })
+      .then(res => setSessions(res.data))
       .catch(err => console.error(err))
       .finally(() => setLoading(false));
   }, [userId, isLoaded]);
 
   if (!isLoaded || loading) {
     return (
-      <div className="min-h-screen bg-[#020617] flex justify-center items-center text-cyan-400">
-         <div className="flex flex-col items-center gap-4">
-           <Activity className="w-8 h-8 animate-pulse" />
-           <span className="font-mono text-sm tracking-widest uppercase text-cyan-500/80">Fetching Neural Records...</span>
-         </div>
+      <div style={{ minHeight: "100vh", background: "#050505", display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 16, color: "#fff", fontFamily: "Inter, sans-serif" }}>
+        <Activity size={28} style={{ opacity: 0.4, animation: "pulse 1.5s ease-in-out infinite" }} />
+        <span style={{ fontFamily: "monospace", fontSize: 11, letterSpacing: "0.12em", textTransform: "uppercase", color: "rgba(255,255,255,0.3)" }}>Fetching Neural Records...</span>
+        <style>{`@keyframes pulse { 0%,100%{opacity:.4} 50%{opacity:.9} }`}</style>
       </div>
     );
   }
 
   if (!userId) {
-     return (
-       <div className="min-h-screen bg-[#020617] flex flex-col justify-center items-center text-red-400 font-mono">
-         <ShieldAlert className="w-12 h-12 mb-4" />
-         <h1>UNAUTHORIZED: CLERK_ID_MISSING</h1>
-         <button onClick={() => window.location.href='/'} className="mt-8 border text-white px-4 py-2 hover:bg-slate-800">Return to Node</button>
-       </div>
-     );
+    return (
+      <div style={{ minHeight: "100vh", background: "#050505", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontFamily: "Inter, sans-serif" }}>
+        <p>Unauthorized. <a href="/" style={{ color: "rgba(255,255,255,0.5)" }}>Go back</a></p>
+      </div>
+    );
   }
 
-  // Calculate Metrics
+  // Metrics
   const totalInterviews = sessions.length;
-  let avgScore = 0;
+  const allScores = sessions.flatMap(s => (s.history || []).map(h => h?.evaluation?.score ?? 0));
+  const avgScore = allScores.length ? (allScores.reduce((a, b) => a + b, 0) / allScores.length).toFixed(1) : "—";
   let highestDiff = "Easy";
-  
-  if (totalInterviews > 0) {
-     const allScores = sessions.flatMap(s => s.history.map(h => h.evaluation.score));
-     avgScore = allScores.length ? (allScores.reduce((a, b) => a + b, 0) / allScores.length).toFixed(1) : 0;
-     
-     if (sessions.some(s => s.currentDifficulty === "Hard")) highestDiff = "Hard";
-     else if (sessions.some(s => s.currentDifficulty === "Medium")) highestDiff = "Medium";
-  }
+  if (sessions.some(s => s.currentDifficulty === "Hard")) highestDiff = "Hard";
+  else if (sessions.some(s => s.currentDifficulty === "Medium")) highestDiff = "Medium";
 
   return (
-    <div className="min-h-screen bg-[#020617] relative text-slate-100 overflow-x-hidden p-6 md:p-12 font-sans z-0">
-      <div className="cyberpunk-bg opacity-20 absolute inset-0 z-[-1]" />
-      
-      {/* Navbar */}
-      <nav className="flex justify-between items-center mb-12">
-        <button onClick={() => window.location.href='/'} className="flex items-center gap-2 text-cyan-500 hover:text-cyan-400 uppercase tracking-widest font-bold text-xs bg-cyan-500/10 px-4 py-2 rounded-lg border border-cyan-500/30 transition-all shadow-[0_0_15px_rgba(34,211,238,0.2)]">
-           <ArrowLeft className="w-4 h-4" /> Return to Simulator
+    <div style={{ minHeight: "100vh", background: "#050505", color: "#fff", fontFamily: "Inter, sans-serif", padding: "0 0 60px" }}>
+      {/* Nav */}
+      <nav style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "20px 40px", borderBottom: "1px solid rgba(255,255,255,0.06)", background: "rgba(5,5,5,0.8)", backdropFilter: "blur(20px)", position: "sticky", top: 0, zIndex: 50 }}>
+        <button onClick={() => window.location.href = "/"} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, fontWeight: 600, color: "rgba(255,255,255,0.6)", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 10, padding: "8px 16px", cursor: "pointer", letterSpacing: "0.06em", textTransform: "uppercase" }}>
+          <ArrowLeft size={13} /> Back to Simulator
         </button>
-        <UserButton appearance={{ elements: { avatarBox: "w-10 h-10 border border-slate-700" } }} />
+        <UserButton />
       </nav>
 
-      {/* Hero Stats */}
-      <div className="mb-12 text-center md:text-left">
-        <h1 className="text-4xl font-black mb-2 uppercase tracking-tight text-white flex items-center gap-3">
-          <Database className="w-8 h-8 text-purple-500" /> Executive Profile
-        </h1>
-        <p className="text-slate-400 ml-1">Agentic tracking dashboard linked to Clerk Auth ID: <span className="text-slate-500 font-mono">{userId.substring(0, 12)}...</span></p>
-      </div>
-      
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
-        <div className="glass-panel p-6 rounded-2xl border border-slate-800 flex items-center gap-6">
-           <div className="w-16 h-16 rounded-xl bg-cyan-500/10 border border-cyan-500/30 flex justify-center items-center">
-             <Target className="w-8 h-8 text-cyan-400" />
-           </div>
-           <div>
-             <p className="text-[10px] uppercase font-bold text-slate-500 tracking-widest">Total Simulations</p>
-             <p className="text-3xl font-black text-white">{totalInterviews}</p>
-           </div>
-        </div>
-        
-        <div className="glass-panel p-6 rounded-2xl border border-slate-800 flex items-center gap-6">
-           <div className="w-16 h-16 rounded-xl bg-purple-500/10 border border-purple-500/30 flex justify-center items-center">
-             <BarChart3 className="w-8 h-8 text-purple-400" />
-           </div>
-           <div>
-             <p className="text-[10px] uppercase font-bold text-slate-500 tracking-widest">Global Avg Score</p>
-             <p className="text-3xl font-black text-white">{avgScore}</p>
-           </div>
+      <div style={{ maxWidth: 1100, margin: "0 auto", padding: "48px 32px 0" }}>
+        {/* Header */}
+        <div style={{ marginBottom: 40 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 8 }}>
+            <Database size={22} color="rgba(255,255,255,0.5)" />
+            <h1 style={{ fontSize: 28, fontWeight: 900, margin: 0, letterSpacing: "-0.02em" }}>Executive Profile</h1>
+          </div>
+          <p style={{ fontSize: 12, color: "rgba(255,255,255,0.28)", fontFamily: "monospace" }}>
+            Clerk ID: {userId?.substring(0, 16)}...
+          </p>
         </div>
 
-        <div className="glass-panel p-6 rounded-2xl border border-slate-800 flex items-center gap-6">
-           <div className="w-16 h-16 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex justify-center items-center">
-             <BrainCircuit className="w-8 h-8 text-emerald-400" />
-           </div>
-           <div>
-             <p className="text-[10px] uppercase font-bold text-slate-500 tracking-widest">Peak Difficulty</p>
-             <p className="text-3xl font-black text-emerald-400">{highestDiff}</p>
-           </div>
-        </div>
-      </div>
-
-      {/* History Feed */}
-      <h3 className="text-sm font-bold border-b border-slate-800 pb-3 text-white uppercase tracking-wider mb-6">Simulation History Data</h3>
-      
-      {sessions.length === 0 ? (
-        <div className="text-center p-20 glass-panel rounded-3xl border border-slate-800/50">
-           <Rocket className="w-12 h-12 text-slate-600 mx-auto mb-4" />
-           <p className="text-slate-400 font-mono text-sm">No simulation records found in MongoDB.</p>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {sessions.map((session, i) => (
-             <motion.div 
-               initial={{ opacity: 0, scale: 0.95, y: 10 }}
-               animate={{ opacity: 1, scale: 1, y: 0 }}
-               transition={{ delay: i * 0.1 }}
-               key={session.sessionId} 
-               className="bg-[#0a0f1d] hover:bg-slate-900 border border-slate-800 hover:border-cyan-500/40 transition-all p-6 rounded-3xl group relative overflow-hidden"
-             >
-                <div className="absolute top-0 right-0 p-4">
-                  <span className={`text-[10px] font-bold px-3 py-1 uppercase rounded-full border ${
-                    session.currentDifficulty === "Hard" ? "bg-red-500/10 border-red-500/30 text-red-400" :
-                    session.currentDifficulty === "Medium" ? "bg-amber-500/10 border-amber-500/30 text-amber-400" :
-                    "bg-emerald-500/10 border-emerald-500/30 text-emerald-400"
-                  }`}>
-                    {session.currentDifficulty}
-                  </span>
-                </div>
-                
-                <h4 className="text-sm font-bold text-white mb-1 mt-1 truncate max-w-[80%]">{session.role}</h4>
-                <p className="text-[10px] text-slate-500 font-mono mb-6">{new Date(session.createdAt).toLocaleDateString()} • {session.history.length} Qs</p>
-                
-                <div className="space-y-4">
-                   <div>
-                     <p className="text-[9px] uppercase font-bold text-red-400 border-b border-red-500/20 pb-1 mb-1.5 flex items-center justify-between">
-                        Weaknesses <span className="px-1.5 bg-red-500/20 rounded">{session.globalWeaknesses.length}</span>
-                     </p>
-                     {session.globalWeaknesses.slice(0, 2).map((w, idx) => (
-                        <p key={idx} className="text-xs text-slate-400 truncate">× {w}</p>
-                     ))}
-                     {session.globalWeaknesses.length === 0 && <p className="text-xs text-slate-600 italic">None logged.</p>}
-                   </div>
-                   
-                   <div>
-                     <p className="text-[9px] uppercase font-bold text-emerald-400 border-b border-emerald-500/20 pb-1 mb-1.5 flex items-center justify-between">
-                        Strengths <span className="px-1.5 bg-emerald-500/20 rounded">{session.globalStrengths.length}</span>
-                     </p>
-                     {session.globalStrengths.slice(0, 2).map((s, idx) => (
-                        <p key={idx} className="text-xs text-slate-400 truncate">✓ {s}</p>
-                     ))}
-                     {session.globalStrengths.length === 0 && <p className="text-xs text-slate-600 italic">None logged.</p>}
-                   </div>
-                </div>
-
-                <div className="mt-6 pt-4 border-t border-slate-800 flex justify-between items-center group-hover:border-cyan-500/20 transition-all">
-                   <div className="flex gap-1 items-end">
-                      {session.history.map((h, idx) => (
-                         <div key={idx} className={`w-3 h-3 rounded-full ${h.evaluation.score >= 7 ? "bg-emerald-500/40" : h.evaluation.score >= 5 ? "bg-amber-500/40" : "bg-red-500/40"}`} />
-                      ))}
-                   </div>
-                   <span className="text-[10px] text-cyan-400 uppercase font-mono tracking-widest">LOG: {session.status}</span>
-                </div>
-             </motion.div>
+        {/* Stat Cards */}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16, marginBottom: 48 }}>
+          {[
+            { icon: <Target size={20} />, label: "Total Simulations", value: totalInterviews },
+            { icon: <BarChart3 size={20} />, label: "Avg Score", value: avgScore },
+            { icon: <BrainCircuit size={20} />, label: "Peak Difficulty", value: highestDiff },
+          ].map(({ icon, label, value }) => (
+            <div key={label} style={{ ...panel, padding: "24px 28px", display: "flex", alignItems: "center", gap: 20 }}>
+              <div style={{ width: 48, height: 48, borderRadius: 14, background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", display: "flex", alignItems: "center", justifyContent: "center", color: "rgba(255,255,255,0.6)" }}>
+                {icon}
+              </div>
+              <div>
+                <p style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", color: "rgba(255,255,255,0.28)", marginBottom: 4 }}>{label}</p>
+                <p style={{ fontSize: 28, fontWeight: 900, margin: 0 }}>{value}</p>
+              </div>
+            </div>
           ))}
         </div>
-      )}
+
+        {/* History */}
+        <h3 style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", color: "rgba(255,255,255,0.3)", borderBottom: "1px solid rgba(255,255,255,0.07)", paddingBottom: 12, marginBottom: 24 }}>
+          Simulation History
+        </h3>
+
+        {sessions.length === 0 ? (
+          <div style={{ ...panel, padding: 64, textAlign: "center" }}>
+            <Rocket size={36} style={{ color: "rgba(255,255,255,0.15)", margin: "0 auto 16px" }} />
+            <p style={{ fontSize: 13, color: "rgba(255,255,255,0.25)", fontFamily: "monospace" }}>No simulations found. Complete an interview to see your history.</p>
+          </div>
+        ) : (
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))", gap: 16 }}>
+            {sessions.map((session, i) => {
+              const sessionScores = (session.history || []).map(h => h?.evaluation?.score ?? 0);
+              const sessionAvg = sessionScores.length ? (sessionScores.reduce((a, b) => a + b, 0) / sessionScores.length).toFixed(1) : "—";
+              return (
+                <motion.div key={session.sessionId || i}
+                  initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: i * 0.07 }}
+                  style={{ ...panel, padding: "24px", position: "relative", overflow: "hidden" }}>
+
+                  {/* Difficulty badge */}
+                  <div style={{ position: "absolute", top: 16, right: 16 }}>
+                    <span style={{ fontSize: 9, fontWeight: 700, padding: "3px 10px", borderRadius: 99, border: "1px solid rgba(255,255,255,0.15)", color: "rgba(255,255,255,0.5)", textTransform: "uppercase", letterSpacing: "0.08em" }}>
+                      {session.currentDifficulty || "—"}
+                    </span>
+                  </div>
+
+                  <h4 style={{ fontSize: 13, fontWeight: 700, margin: "0 0 4px", maxWidth: "80%", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{session.role}</h4>
+                  <p style={{ fontSize: 10, color: "rgba(255,255,255,0.25)", fontFamily: "monospace", margin: "0 0 20px" }}>
+                    {session.createdAt ? new Date(session.createdAt).toLocaleDateString() : "—"} · {(session.history || []).length} questions
+                  </p>
+
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 16 }}>
+                    <div>
+                      <p style={{ fontSize: 9, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: "rgba(255,255,255,0.22)", marginBottom: 6 }}>Weaknesses</p>
+                      {(session.globalWeaknesses || []).length === 0
+                        ? <p style={{ fontSize: 11, color: "rgba(255,255,255,0.15)", fontStyle: "italic" }}>None</p>
+                        : (session.globalWeaknesses || []).slice(0, 2).map((w, idx) => (
+                          <p key={idx} style={{ fontSize: 11, color: "rgba(255,255,255,0.45)", margin: "0 0 3px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>— {w}</p>
+                        ))}
+                    </div>
+                    <div>
+                      <p style={{ fontSize: 9, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: "rgba(255,255,255,0.22)", marginBottom: 6 }}>Strengths</p>
+                      {(session.globalStrengths || []).length === 0
+                        ? <p style={{ fontSize: 11, color: "rgba(255,255,255,0.15)", fontStyle: "italic" }}>None</p>
+                        : (session.globalStrengths || []).slice(0, 2).map((s, idx) => (
+                          <p key={idx} style={{ fontSize: 11, color: "rgba(255,255,255,0.45)", margin: "0 0 3px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>+ {s}</p>
+                        ))}
+                    </div>
+                  </div>
+
+                  {/* Score bar */}
+                  <div style={{ borderTop: "1px solid rgba(255,255,255,0.06)", paddingTop: 14, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <div style={{ display: "flex", gap: 4 }}>
+                      {(session.history || []).map((h, idx) => (
+                        <div key={idx} style={{ width: 10, height: 10, borderRadius: "50%", background: (h?.evaluation?.score ?? 0) >= 7 ? "rgba(255,255,255,0.6)" : (h?.evaluation?.score ?? 0) >= 5 ? "rgba(255,255,255,0.25)" : "rgba(255,255,255,0.08)" }} />
+                      ))}
+                    </div>
+                    <span style={{ fontSize: 10, fontFamily: "monospace", color: "rgba(255,255,255,0.3)", textTransform: "uppercase", letterSpacing: "0.06em" }}>
+                      avg {sessionAvg}/10
+                    </span>
+                  </div>
+                </motion.div>
+              );
+            })}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
