@@ -15,7 +15,7 @@ export default function Profile() {
   useEffect(() => {
     if (!isLoaded || !userId) return;
     
-    axios.get(`http://localhost:5000/interview/user/${userId}`)
+    axios.get(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000"}/interview/user/${userId}`)
       .then(res => {
         setSessions(res.data);
       })

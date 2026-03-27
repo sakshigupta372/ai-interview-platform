@@ -184,7 +184,7 @@ export default function Home() {
     setIsTyping(true); setStage("interview");
     const ctx = `A ${persona} acting as a ${interviewType} interviewer at ${company}, for a ${role} position.`;
     try {
-      const res = await axios.post("http://localhost:5000/interview/start", { role: ctx, clerkId: userId, userApiKey });
+      const res = await axios.post(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000"}/interview/start`, { role: ctx, clerkId: userId, userApiKey });
       setSessionId(res.data.sessionId);
       setChatHistory([{ role: "ai", text: res.data.question, isInitial: true }]);
       setCurrentDifficulty("Medium"); speak(res.data.question);
@@ -201,7 +201,7 @@ export default function Home() {
     setChatHistory(hist); setAnswer(""); setIsTyping(true);
     setTimeout(() => setIsAdjusting(true), 1200);
     try {
-      const res = await axios.post("http://localhost:5000/interview/answer", { sessionId, answer: userAns, userApiKey });
+      const res = await axios.post(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000"}/interview/answer`, { sessionId, answer: userAns, userApiKey });
       const updated = [...hist];
       updated[updated.length - 1].evaluation = res.data.evaluation;
       if (res.data.sessionSummary) {

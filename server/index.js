@@ -5,7 +5,22 @@ const connectDB = require("./db"); // Import DB
 
 const app = express();
 
-app.use(cors());
+app.use(cors({
+  origin: function (origin, callback) {
+    // Allow requests with no origin (mobile apps, curl, Render health checks)
+    if (!origin) return callback(null, true);
+    const allowed = [
+      "http://localhost:3000",
+      process.env.FRONTEND_URL, // set this in Render to your Vercel URL
+    ].filter(Boolean);
+    if (allowed.includes(origin) || origin.endsWith(".vercel.app")) {
+      callback(null, true);
+    } else {
+      callback(new Error(`CORS: Origin ${origin} not allowed`));
+    }
+  },
+  credentials: true
+}));
 app.use(express.json());
 
 // Connect Server to MongoDB
