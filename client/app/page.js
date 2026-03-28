@@ -184,11 +184,22 @@ export default function Home() {
     setIsTyping(true); setStage("interview");
     const ctx = `A ${persona} acting as a ${interviewType} interviewer at ${company}, for a ${role} position.`;
     try {
-      const res = await axios.post(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000"}/interview/start`, { role: ctx, clerkId: userId, userApiKey });
+      const res = await axios.post(
+        `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000"}/interview/start`,
+        { role: ctx, clerkId: userId, userApiKey },
+        { timeout: 30000 } // 30s timeout to handle Render cold starts
+      );
       setSessionId(res.data.sessionId);
       setChatHistory([{ role: "ai", text: res.data.question, isInitial: true }]);
       setCurrentDifficulty("Medium"); speak(res.data.question);
-    } catch { alert("Backend not running on port 5000."); setStage("role-selection"); }
+    } catch (err) {
+      const isNetwork = !err.response; // no response = network/timeout/CORS
+      const msg = isNetwork
+        ? "Could not reach the server. If this is your first request, Render may be waking up (~30s). Please try again in a moment."
+        : `Server error ${err.response?.status}: ${err.response?.data?.error || "Unknown error"}`;
+      alert(msg);
+      setStage("role-selection");
+    }
     finally { setIsTyping(false); }
   };
 
