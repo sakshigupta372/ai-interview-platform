@@ -1,6 +1,6 @@
 # NEXUS.AI — Agentic Interview Simulation Platform
 
-> **Live Demo → [ai-interview-platform-nr7v.vercel.app](https://ai-interview-platform-nr7v.vercel.app)**
+
 
 ![NEXUS.AI Screenshot](./assets/screenshot.png)
 
