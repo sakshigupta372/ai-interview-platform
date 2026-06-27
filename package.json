@@ -1,0 +1,8 @@
+{
+  "name": "ai-interview-platform",
+  "private": true,
+  "scripts": {
+    "start": "npm start --prefix server",
+    "build": "npm install --prefix server"
+  }
+}
