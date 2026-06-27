@@ -1,6 +1,7 @@
 # NEXUS.AI — Agentic Interview Simulation Platform
 
-
+> **Live Demo → [ai-interview-platform-nr7v.vercel.app](https://ai-interview-platform-nr7v.vercel.app)**  
+> **GitHub → [sakshigupta372/ai-interview-platform](https://github.com/sakshigupta372/ai-interview-platform)**
 
 ![NEXUS.AI Screenshot](./assets/screenshot.png)
 
@@ -140,6 +141,25 @@ FRONTEND_URL=https://your-app.vercel.app
 | [Clerk](https://clerk.com) | Authentication | Free (10k MAU) |
 
 **Total: $0/month**
+
+### Connect Vercel to GitHub (auto-deploy on push)
+
+1. Open [Vercel Dashboard](https://vercel.com/dashboard) → your project (`ai-interview-platform-nr7v`)
+2. **Settings → Git** → **Connect Git Repository**
+3. Select **`sakshigupta372/ai-interview-platform`** and branch **`main`**
+4. **Settings → General → Root Directory** → set to **`client`** (monorepo)
+5. **Settings → Environment Variables** (Production):
+
+   | Variable | Value |
+   |---|---|
+   | `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` | from [Clerk dashboard](https://dashboard.clerk.com) |
+   | `CLERK_SECRET_KEY` | from Clerk dashboard |
+   | `NEXT_PUBLIC_API_URL` | your Render backend URL (e.g. `https://xxx.onrender.com`) |
+
+6. On **Render** (backend), set `FRONTEND_URL=https://ai-interview-platform-nr7v.vercel.app`
+7. Push to `main` on GitHub — Vercel rebuilds automatically
+
+Copy env templates from `client/.env.example` and `server/.env.example`.
 
 ---
 

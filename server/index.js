@@ -11,7 +11,8 @@ app.use(cors({
     if (!origin) return callback(null, true);
     const allowed = [
       "http://localhost:3000",
-      process.env.FRONTEND_URL, // set this in Render to your Vercel URL
+      "https://ai-interview-platform-nr7v.vercel.app",
+      process.env.FRONTEND_URL,
     ].filter(Boolean);
     if (allowed.includes(origin) || origin.endsWith(".vercel.app")) {
       callback(null, true);
