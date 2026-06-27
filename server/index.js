@@ -28,7 +28,9 @@ app.use(express.json());
 connectDB();
 
 const interviewRoute = require("./routes/interview");
+const mentorRoute = require("./routes/mentor");
 app.use("/interview", interviewRoute);
+app.use("/mentor", mentorRoute);
 
 app.get("/", (req, res) => {
   res.send("AI Interview Platform API + MongoDB Running...");

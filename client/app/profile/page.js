@@ -54,7 +54,10 @@ export default function Profile() {
         <button onClick={() => window.location.href = "/"} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, fontWeight: 600, color: "rgba(255,255,255,0.6)", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 10, padding: "8px 16px", cursor: "pointer", letterSpacing: "0.06em", textTransform: "uppercase" }}>
           <ArrowLeft size={13} /> Back to Simulator
         </button>
-        <UserButton />
+        <div style={{ display: "flex", gap: 16, alignItems: "center" }}>
+          <button onClick={() => window.location.href = "/mentor"} style={{ fontSize: 11, color: "rgba(255,255,255,0.45)", fontFamily: "monospace", background: "none", border: "none", cursor: "pointer" }}>Mentor →</button>
+          <UserButton />
+        </div>
       </nav>
 
       <div style={{ maxWidth: 1100, margin: "0 auto", padding: "48px 32px 0" }}>

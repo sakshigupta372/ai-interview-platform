@@ -248,6 +248,9 @@ export default function Home() {
           )}
           {isLoaded && userId && (
             <>
+              <button onClick={() => window.location.href = "/mentor"} style={{ fontSize: 11, color: "rgba(255,255,255,0.45)", fontFamily: "monospace", letterSpacing: "0.05em", background: "none", border: "none", cursor: "pointer" }}>
+                Mentor →
+              </button>
               <button onClick={() => window.location.href = "/profile"} style={{ fontSize: 11, color: "rgba(255,255,255,0.45)", fontFamily: "monospace", letterSpacing: "0.05em", background: "none", border: "none", cursor: "pointer" }}>
                 History →
               </button>
