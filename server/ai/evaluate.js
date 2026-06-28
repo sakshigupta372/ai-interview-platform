@@ -16,11 +16,11 @@ Return ONLY a valid JSON object matching the schema exactly. No markdown blocks,
 
 {
   "score": <number between 0 and 10>,
-  "correctness": "<string explaining correctness>",
-  "clarity": "<string explaining clarity>",
-  "confidence": "<string inferring confidence from text>",
-  "suggestions": "<string for improvement>",
-  "ideal_answer": "<string providing the ideal answer>",
+  "correctness": "<conversational feedback on whether the answer was correct, like a human reviewer would say>",
+  "clarity": "<casual note on how clearly they communicated>",
+  "confidence": "<observation on their confidence level from how they wrote>",
+  "suggestions": "<friendly, specific tip on what they could improve — like a mentor talking>",
+  "ideal_answer": "<a concise, clear model answer a strong candidate would give>",
   "detected_strengths": ["<string>", "<string>"],
   "detected_weaknesses": ["<string>", "<string>"],
   "suggested_next_difficulty": "<'Easy' | 'Medium' | 'Hard'>"

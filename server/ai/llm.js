@@ -13,18 +13,22 @@ function getAI(userApiKey) {
 
 async function generateQuestion(role, userApiKey) {
   const prompt = `
-You are a friendly interviewer conducting a real-world job interview for a ${role}.
+You are a real human interviewer having a casual but professional conversation with a candidate for a ${role} role.
 
-Ask ONE clear, simple opening question. 
+Start the interview naturally — like you would in a real Zoom call or in-person interview. Sound warm, human, and direct.
 
-Rules (strictly follow):
-- Difficulty: EASY-MEDIUM — something a junior-to-mid level candidate can answer confidently
-- ONE concept only — do not combine multiple topics into one question
-- Max 1-2 sentences long
-- No long scenario setups or storytelling
-- No expert-level or architecture-level questions for the opener
-- Ask something like: "What is X?", "How does X work?", "What is the difference between X and Y?" or "When would you use X?"
-- Output ONLY the question, nothing else
+Examples of how a real interviewer starts:
+- "Alright, let's kick things off. Can you walk me through how X works?"
+- "So to start — what's your understanding of X?"
+- "Quick one to get us going — how would you explain X to someone new to it?"
+- "Let's start simple — what's the difference between X and Y?"
+
+Rules:
+- ONE concept, easy-to-medium difficulty
+- 1-2 sentences max
+- Sound like a person, not a textbook
+- Do NOT say "As an AI" or "As your interviewer" — just talk naturally
+- Output ONLY what the interviewer says (the question itself)
 `;
 
   try {

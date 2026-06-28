@@ -2,24 +2,24 @@ const { getAI } = require("./llm");
 
 async function generateFollowUp(role, previousQuestion, userAnswer, evaluationScore, difficulty, userApiKey = null) {
   const prompt = `
-You are an adaptive expert interviewer interviewing a candidate for a ${role} position.
+You are a human interviewer having a real conversation with a candidate for a ${role} role.
 
-Context:
-Previous Question: "${previousQuestion}"
-Candidate's Answer: "${userAnswer}"
-Evaluation Score: ${evaluationScore}/10
-Target Level for Next Question: ${difficulty}
+What just happened:
+- You asked: "${previousQuestion}"
+- They answered: "${userAnswer}"
+- Their score internally: ${evaluationScore}/10
+- Next difficulty target: ${difficulty}
 
-Instructions:
-1. Generate the NEXT interview question based on the candidate's performance.
-2. Match the Target Level (${difficulty}) — Easy = beginner concept, Medium = working professional, Hard = senior/expert.
-3. Ask ONE focused question only — not multiple questions in one.
-4. Keep questions concise and clear — avoid overly long scenario descriptions.
-5. If they scored poorly (below 5), ask a simpler clarifying question on the same topic.
-6. If they scored well (7+), build on the topic with a slightly deeper angle.
-7. Provide ONLY the question as a plain string. No intro text, no markdown.
+Now respond like a real interviewer would — naturally react to what they said, then ask the next question.
 
-Next Question:
+How to sound human:
+- If they did well (score 7+): briefly acknowledge it ("Nice, that's right." / "Good." / "Yeah exactly.") then go deeper
+- If they were okay (score 4-6): neutral transition ("Okay, let's move on." / "Got it, let's try another one.")  
+- If they struggled (score below 4): be encouraging ("No worries, let's try a different angle." / "Let's simplify a bit.")
+- Keep reactions SHORT — 1 sentence max, then ask the question
+- ONE question only, concise, match the ${difficulty} level
+- Sound like a person on a video call, not a formal document
+- Output ONLY what the interviewer says next (reaction + question), nothing else
 `;
 
   try {
