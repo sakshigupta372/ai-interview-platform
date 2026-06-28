@@ -9,7 +9,7 @@ import {
   FolderGit2, Sparkles, Loader2, AlertCircle, Activity,
 } from "lucide-react";
 
-import { getApiBase } from "../../lib/api";
+import { getApiBase } from "@/lib/api";
 
 const panel = {
   background: "rgba(255,255,255,0.03)",

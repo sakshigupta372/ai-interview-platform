@@ -7,7 +7,7 @@ import {
   Loader2, Zap, BrainCircuit, Timer, ShieldAlert,
   Mic, MicOff, Rocket, Lightbulb, Target, Brain, Activity,
 } from "lucide-react";
-import { getApiBase } from "../lib/api";
+import { getApiBase } from "@/lib/api";
 import { useAuth, SignInButton, UserButton } from "@clerk/nextjs";
 
 // ─── ShapeGrid (canvas) ───────────────────────────────────────────────────────

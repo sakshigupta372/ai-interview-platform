@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import axios from "axios";
 import { useAuth, UserButton } from "@clerk/nextjs";
 import { Rocket, Target, ArrowLeft, BarChart3, BrainCircuit, Activity, Database } from "lucide-react";
-import { getApiBase } from "../lib/api";
+import { getApiBase } from "@/lib/api";
 import { motion } from "framer-motion";
 
 const panel = { background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 20, backdropFilter: "blur(20px)" };
