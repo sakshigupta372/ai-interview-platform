@@ -148,7 +148,8 @@ FRONTEND_URL=https://your-app.vercel.app
 2. **Settings → Git** → **Connect Git Repository**
 3. Select **`sakshigupta372/ai-interview-platform`** and branch **`main`**
 4. **Settings → General → Root Directory** → set to **`client`** (monorepo)
-5. **Settings → Environment Variables** (Production):
+5. **Leave Install Command and Build Command empty** (defaults: `npm install` + `npm run build` run inside `client/`)
+6. **Settings → Environment Variables** (Production):
 
    | Variable | Value |
    |---|---|
