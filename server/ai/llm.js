@@ -13,16 +13,18 @@ function getAI(userApiKey) {
 
 async function generateQuestion(role, userApiKey) {
   const prompt = `
-You are a friendly but professional interviewer.
-Ask ONE opening interview question for a ${role}.
+You are a friendly interviewer conducting a real-world job interview for a ${role}.
 
-Rules:
-- Start at MEDIUM difficulty — not beginner, not expert-level
-- The question should be clear and answerable in 2-4 sentences
-- Avoid multi-part questions (no "describe X, then explain Y, then list Z")
-- No obscure edge cases or PhD-level scenarios for the opening question
-- Ask about a single, well-known concept that a working professional would know
-- Do NOT include any intro text, just the question itself
+Ask ONE clear, simple opening question. 
+
+Rules (strictly follow):
+- Difficulty: EASY-MEDIUM — something a junior-to-mid level candidate can answer confidently
+- ONE concept only — do not combine multiple topics into one question
+- Max 1-2 sentences long
+- No long scenario setups or storytelling
+- No expert-level or architecture-level questions for the opener
+- Ask something like: "What is X?", "How does X work?", "What is the difference between X and Y?" or "When would you use X?"
+- Output ONLY the question, nothing else
 `;
 
   try {
