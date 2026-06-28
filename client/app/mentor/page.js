@@ -60,7 +60,7 @@ export default function MentorPage() {
   }, [userId, isLoaded]);
 
   const generatePlan = async () => {
-    const userApiKey = sessionStorage.getItem("nexus_gemini_key");
+    const userApiKey = sessionStorage.getItem("careerforge_gemini_key");
     if (!userApiKey) {
       setError("Add your Gemini API key on the home page first (Connect Your AI screen).");
       return;

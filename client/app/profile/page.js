@@ -3,9 +3,10 @@
 import { useEffect, useState } from "react";
 import axios from "axios";
 import { useAuth, UserButton } from "@clerk/nextjs";
-import { Rocket, Target, ArrowLeft, BarChart3, BrainCircuit, Activity, Database, ChevronDown, ChevronUp, MessageSquare } from "lucide-react";
+import { Rocket, Target, ArrowLeft, BarChart3, BrainCircuit, Activity, Database, ChevronDown, ChevronUp, MessageSquare, TrendingUp } from "lucide-react";
 import { getApiBase } from "@/lib/api";
 import { motion, AnimatePresence } from "framer-motion";
+import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, BarChart, Bar, CartesianGrid } from "recharts";
 
 const panel = { background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 20, backdropFilter: "blur(20px)" };
 
@@ -194,6 +195,19 @@ export default function Profile() {
   if (sessions.some(s => s.currentDifficulty === "Hard")) highestDiff = "Hard";
   else if (sessions.some(s => s.currentDifficulty === "Medium")) highestDiff = "Medium";
 
+  const scoreChartData = [...sessions].reverse().map((s, i) => ({
+    session: `S${i + 1}`,
+    score: s.history?.length
+      ? Number((s.history.reduce((a, h) => a + (h?.evaluation?.score || 0), 0) / s.history.length).toFixed(1))
+      : 0,
+  }));
+
+  const weaknessMap = {};
+  sessions.forEach(s => (s.globalWeaknesses || []).forEach(w => { weaknessMap[w] = (weaknessMap[w] || 0) + 1; }));
+  const weaknessChartData = Object.entries(weaknessMap)
+    .sort((a, b) => b[1] - a[1]).slice(0, 6)
+    .map(([text, count]) => ({ text: text.length > 22 ? text.slice(0, 22) + "…" : text, count }));
+
   return (
     <div style={{ minHeight: "100vh", background: "#050505", color: "#fff", fontFamily: "Inter, sans-serif", padding: "0 0 60px" }}>
       <nav style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "20px 40px", borderBottom: "1px solid rgba(255,255,255,0.06)", background: "rgba(5,5,5,0.8)", backdropFilter: "blur(20px)", position: "sticky", top: 0, zIndex: 50 }}>
@@ -234,6 +248,49 @@ export default function Profile() {
             </div>
           ))}
         </div>
+
+        {/* Charts */}
+        {sessions.length > 1 && (
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 40 }}>
+            {/* Score Trend */}
+            <div style={{ ...panel, padding: "24px" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 20 }}>
+                <TrendingUp size={14} color="rgba(255,255,255,0.4)" />
+                <span style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", color: "rgba(255,255,255,0.28)" }}>Score Trend</span>
+              </div>
+              <ResponsiveContainer width="100%" height={160}>
+                <LineChart data={scoreChartData} margin={{ top: 4, right: 8, bottom: 4, left: -20 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
+                  <XAxis dataKey="session" tick={{ fill: "rgba(255,255,255,0.3)", fontSize: 10 }} axisLine={false} tickLine={false} />
+                  <YAxis domain={[0, 10]} tick={{ fill: "rgba(255,255,255,0.3)", fontSize: 10 }} axisLine={false} tickLine={false} />
+                  <Tooltip contentStyle={{ background: "#111", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, fontSize: 11 }} labelStyle={{ color: "rgba(255,255,255,0.5)" }} itemStyle={{ color: "#fff" }} />
+                  <Line type="monotone" dataKey="score" stroke="rgba(255,255,255,0.7)" strokeWidth={2} dot={{ fill: "#fff", r: 3 }} activeDot={{ r: 5 }} />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+
+            {/* Weakness Frequency */}
+            <div style={{ ...panel, padding: "24px" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 20 }}>
+                <BarChart3 size={14} color="rgba(255,255,255,0.4)" />
+                <span style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", color: "rgba(255,255,255,0.28)" }}>Top Weaknesses</span>
+              </div>
+              {weaknessChartData.length === 0
+                ? <p style={{ fontSize: 12, color: "rgba(255,255,255,0.2)", fontStyle: "italic", textAlign: "center", paddingTop: 40 }}>No weaknesses recorded yet</p>
+                : (
+                  <ResponsiveContainer width="100%" height={160}>
+                    <BarChart data={weaknessChartData} layout="vertical" margin={{ top: 0, right: 8, bottom: 0, left: 4 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" horizontal={false} />
+                      <XAxis type="number" tick={{ fill: "rgba(255,255,255,0.3)", fontSize: 10 }} axisLine={false} tickLine={false} />
+                      <YAxis type="category" dataKey="text" tick={{ fill: "rgba(255,255,255,0.4)", fontSize: 9 }} axisLine={false} tickLine={false} width={90} />
+                      <Tooltip contentStyle={{ background: "#111", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, fontSize: 11 }} itemStyle={{ color: "#fff" }} />
+                      <Bar dataKey="count" fill="rgba(255,255,255,0.15)" radius={[0, 4, 4, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                )}
+            </div>
+          </div>
+        )}
 
         <h3 style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", color: "rgba(255,255,255,0.3)", borderBottom: "1px solid rgba(255,255,255,0.07)", paddingBottom: 12, marginBottom: 24 }}>
           Simulation History

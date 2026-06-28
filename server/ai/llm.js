@@ -11,25 +11,34 @@ function getAI(userApiKey) {
   return ai;
 }
 
-async function generateQuestion(role, userApiKey) {
-  const prompt = `
-You are a real human interviewer having a casual but professional conversation with a candidate for a ${role} role.
+async function generateQuestion(role, userApiKey, resumeContext = null, isCodingRound = false) {
+  let prompt;
+
+  if (isCodingRound) {
+    prompt = `You are a technical interviewer conducting a coding interview for a ${role} position.
+Generate ONE coding problem. Include:
+1. Clear problem statement
+2. Input/Output format
+3. Constraints
+4. 1-2 examples with expected output
+
+Output ONLY the problem. No extra commentary.`;
+  } else {
+    const resumeSection = resumeContext
+      ? `\nCandidate Profile:\n- Recent Role: ${resumeContext.recent_role} at ${resumeContext.recent_company}\n- Experience: ${resumeContext.years_experience} years\n- Top Skills: ${(resumeContext.top_skills || []).join(", ")}\n- Background: ${resumeContext.summary}\n\nTailor the question to their specific background and the target role.`
+      : "";
+
+    prompt = `You are a real human interviewer having a casual but professional conversation with a candidate for a ${role} role.${resumeSection}
 
 Start the interview naturally — like you would in a real Zoom call or in-person interview. Sound warm, human, and direct.
-
-Examples of how a real interviewer starts:
-- "Alright, let's kick things off. Can you walk me through how X works?"
-- "So to start — what's your understanding of X?"
-- "Quick one to get us going — how would you explain X to someone new to it?"
-- "Let's start simple — what's the difference between X and Y?"
 
 Rules:
 - ONE concept, easy-to-medium difficulty
 - 1-2 sentences max
 - Sound like a person, not a textbook
 - Do NOT say "As an AI" or "As your interviewer" — just talk naturally
-- Output ONLY what the interviewer says (the question itself)
-`;
+- Output ONLY what the interviewer says (the question itself)`;
+  }
 
   try {
     const client = getAI(userApiKey);

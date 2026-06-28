@@ -8,15 +8,15 @@ const sessionService = require("../services/session");
 
 const MAX_QUESTIONS = 5;
 
-// 1. START INTERVIEW SESSION 
+// 1. START INTERVIEW SESSION
 router.post("/start", async (req, res) => {
   try {
-    const { role, clerkId, userApiKey } = req.body;
+    const { role, clerkId, userApiKey, resumeContext, isCodingRound } = req.body;
     if (!role) {
       return res.status(400).json({ error: "Role is required" });
     }
 
-    const question = await generateQuestion(role, userApiKey);
+    const question = await generateQuestion(role, userApiKey, resumeContext || null, !!isCodingRound);
     const session = await sessionService.createSession(role, clerkId);
     await sessionService.updateCurrentQuestion(session.sessionId, question);
 
@@ -31,10 +31,10 @@ router.post("/start", async (req, res) => {
   }
 });
 
-// 2. SUBMIT ANSWER, EVALUATE & NEXT 
+// 2. SUBMIT ANSWER, EVALUATE & NEXT
 router.post("/answer", async (req, res) => {
   try {
-    const { sessionId, answer, userApiKey } = req.body;
+    const { sessionId, answer, userApiKey, resumeContext, isCodingRound } = req.body;
 
     if (!sessionId || !answer) {
       return res.status(400).json({ error: "sessionId and answer are required" });
@@ -53,7 +53,7 @@ router.post("/answer", async (req, res) => {
     const currentDifficulty = session.currentDifficulty || "Medium";
 
     // 2. Ask Brain 2 (Evaluator) to score the answer and adapt difficulty
-    const evaluation = await evaluateAnswer(questionTheyAreAnswering, answer, currentDifficulty, userApiKey);
+    const evaluation = await evaluateAnswer(questionTheyAreAnswering, answer, currentDifficulty, userApiKey, !!isCodingRound);
 
     // 3. Save Q&A and Strengths/Weaknesses to MongoDB
     await sessionService.updateSessionData(
@@ -82,12 +82,13 @@ router.post("/answer", async (req, res) => {
 
     // 5. Ask Brain 3 (Follow-up) to generate the next adaptive question based on new Difficulty!
     const nextQuestion = await generateFollowUp(
-      updatedSession.role, 
-      questionTheyAreAnswering, 
-      answer, 
+      updatedSession.role,
+      questionTheyAreAnswering,
+      answer,
       evaluation.score,
       updatedSession.currentDifficulty,
-      userApiKey
+      userApiKey,
+      !!isCodingRound
     );
 
     // Update session state in DB

@@ -3,8 +3,30 @@ const { getAI } = require("./llm");
 // Helper: sleep for ms milliseconds
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-async function evaluateAnswer(question, answer, currentDifficulty = "Medium", userApiKey = null) {
-  const prompt = `
+async function evaluateAnswer(question, answer, currentDifficulty = "Medium", userApiKey = null, isCodingRound = false) {
+  const prompt = isCodingRound ? `
+You are an expert coding interviewer evaluating a candidate's solution.
+
+Problem: ${question}
+Candidate's Code:
+${answer}
+
+Return ONLY a valid JSON object matching the schema exactly. No markdown blocks, no extra text.
+
+{
+  "score": <number between 0 and 10>,
+  "correctness": "<does the solution correctly solve the problem?>",
+  "clarity": "<code readability, naming conventions, structure>",
+  "confidence": "<inference from the approach and style used>",
+  "suggestions": "<specific, actionable code improvements>",
+  "ideal_answer": "<a clean optimal solution with brief explanation>",
+  "detected_strengths": ["<string>", "<string>"],
+  "detected_weaknesses": ["<string>", "<string>"],
+  "suggested_next_difficulty": "<'Easy' | 'Medium' | 'Hard'>",
+  "time_complexity": "<Big-O time complexity of candidate's solution>",
+  "space_complexity": "<Big-O space complexity of candidate's solution>"
+}
+` : `
 You are an expert ${currentDifficulty}-level interviewer.
 
 Evaluate the candidate's answer.
@@ -73,7 +95,8 @@ Return ONLY a valid JSON object matching the schema exactly. No markdown blocks,
           ideal_answer: "A complete answer should address the concept, provide an example, and cover edge cases.",
           detected_strengths: [],
           detected_weaknesses: ["Extremely brief response", "No technical depth shown"],
-          suggested_next_difficulty: "Easy"
+          suggested_next_difficulty: "Easy",
+          ...(isCodingRound && { time_complexity: "N/A", space_complexity: "N/A" })
         };
       }
 

@@ -6,9 +6,13 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   Loader2, Zap, BrainCircuit, Timer, ShieldAlert,
   Mic, MicOff, Rocket, Lightbulb, Target, Brain, Activity,
+  Download, Upload, CheckCircle, FileText, Code2,
 } from "lucide-react";
 import { getApiBase } from "@/lib/api";
 import { useAuth, SignInButton, UserButton } from "@clerk/nextjs";
+import dynamic from "next/dynamic";
+
+const CodeEditor = dynamic(() => import("../../components/CodeEditor"), { ssr: false });
 
 // ─── ShapeGrid (canvas) ───────────────────────────────────────────────────────
 function ShapeGrid() {
@@ -101,13 +105,17 @@ export default function Home() {
 
   const [sessionId, setSessionId] = useState("");
   const [userApiKey, setUserApiKey] = useState("");
+  const [resumeFile, setResumeFile] = useState(null);
+  const [resumeContext, setResumeContext] = useState(null);
+  const [isParsingResume, setIsParsingResume] = useState(false);
+  const [codeLanguage, setCodeLanguage] = useState("javascript");
 
   // After Clerk loads and user is signed in, check if we already have their key in sessionStorage.
   // If not, redirect them to the API Key entry screen.
   useEffect(() => {
     if (!isLoaded) return;
     if (userId) {
-      const saved = sessionStorage.getItem("nexus_gemini_key");
+      const saved = sessionStorage.getItem("careerforge_gemini_key");
       if (saved) {
         setUserApiKey(saved);
       } else {
@@ -181,6 +189,94 @@ export default function Home() {
   useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [chatHistory, isTyping]);
 
   const apiBase = getApiBase();
+  const isCodingRound = interviewType === "Coding Round";
+
+  const handleResumeUpload = async (file) => {
+    if (!file) return;
+    setResumeFile(file);
+    setIsParsingResume(true);
+    try {
+      const formData = new FormData();
+      formData.append("resume", file);
+      formData.append("userApiKey", userApiKey);
+      const res = await axios.post(`${apiBase}/resume/parse`, formData, { timeout: 60000 });
+      setResumeContext(res.data.context);
+    } catch (e) {
+      console.error("Resume parse failed:", e);
+      setResumeContext(null);
+    } finally {
+      setIsParsingResume(false);
+    }
+  };
+
+  const downloadReport = async () => {
+    if (!finalSummary) return;
+    const { jsPDF } = await import("jspdf");
+    const doc = new jsPDF();
+    const W = doc.internal.pageSize.getWidth();
+    let y = 20;
+
+    doc.setFontSize(20); doc.setFont("helvetica", "bold");
+    doc.text("CareerForge — Interview Report", W / 2, y, { align: "center" }); y += 10;
+
+    doc.setFontSize(10); doc.setFont("helvetica", "normal");
+    doc.setTextColor(120);
+    doc.text(`${company} · ${interviewType} · ${new Date().toLocaleDateString()}`, W / 2, y, { align: "center" });
+    y += 8;
+    doc.text(`Role: ${role}`, W / 2, y, { align: "center" });
+    y += 14;
+
+    doc.setTextColor(0);
+    doc.setFontSize(11); doc.setFont("helvetica", "bold");
+    doc.text(`Peak Difficulty: ${finalSummary.currentDifficulty}   Avg Score: ${
+      finalSummary.history.length
+        ? (finalSummary.history.reduce((a, h) => a + (h?.evaluation?.score || 0), 0) / finalSummary.history.length).toFixed(1)
+        : "—"
+    }/10   Questions: ${finalSummary.history.length}`, 14, y);
+    y += 12;
+
+    doc.setDrawColor(220); doc.line(14, y, W - 14, y); y += 10;
+
+    finalSummary.history.forEach((item, idx) => {
+      if (y > 250) { doc.addPage(); y = 20; }
+      doc.setFontSize(11); doc.setFont("helvetica", "bold"); doc.setTextColor(0);
+      doc.text(`Q${idx + 1} [${item.difficulty || "Medium"}] — Score: ${item?.evaluation?.score ?? "—"}/10`, 14, y); y += 7;
+
+      doc.setFontSize(9); doc.setFont("helvetica", "normal"); doc.setTextColor(40);
+      const qLines = doc.splitTextToSize(`Question: ${item.question}`, W - 28);
+      doc.text(qLines, 14, y); y += qLines.length * 5 + 3;
+
+      const aLines = doc.splitTextToSize(`Answer: ${item.answer}`, W - 28);
+      doc.text(aLines, 14, y); y += aLines.length * 5 + 3;
+
+      if (item?.evaluation?.suggestions) {
+        doc.setTextColor(80);
+        const sLines = doc.splitTextToSize(`Tip: ${item.evaluation.suggestions}`, W - 28);
+        doc.text(sLines, 14, y); y += sLines.length * 5 + 3;
+      }
+      if (item?.evaluation?.ideal_answer) {
+        doc.setTextColor(60);
+        const iLines = doc.splitTextToSize(`Ideal: ${item.evaluation.ideal_answer}`, W - 28);
+        doc.text(iLines, 14, y); y += iLines.length * 5 + 3;
+      }
+      if (item?.evaluation?.time_complexity) {
+        doc.setTextColor(80);
+        doc.text(`Time: ${item.evaluation.time_complexity}  Space: ${item.evaluation.space_complexity}`, 14, y); y += 6;
+      }
+      doc.setDrawColor(230); doc.line(14, y, W - 14, y); y += 8;
+    });
+
+    if (finalSummary.globalStrengths?.length || finalSummary.globalWeaknesses?.length) {
+      if (y > 240) { doc.addPage(); y = 20; }
+      doc.setFontSize(11); doc.setFont("helvetica", "bold"); doc.setTextColor(0);
+      doc.text("Overall Profile", 14, y); y += 8;
+      doc.setFontSize(9); doc.setFont("helvetica", "normal");
+      (finalSummary.globalStrengths || []).forEach(s => { doc.setTextColor(40); doc.text(`+ ${s}`, 18, y); y += 5; });
+      (finalSummary.globalWeaknesses || []).forEach(w => { doc.setTextColor(100); doc.text(`— ${w}`, 18, y); y += 5; });
+    }
+
+    doc.save(`careerforge-report-${Date.now()}.pdf`);
+  };
 
   const startInterview = async () => {
     if (!role || !userId) return;
@@ -189,12 +285,13 @@ export default function Home() {
     try {
       const res = await axios.post(
         `${apiBase}/interview/start`,
-        { role: ctx, clerkId: userId, userApiKey },
-        { timeout: 90000 } // Render free tier can take ~50s to wake up
+        { role: ctx, clerkId: userId, userApiKey, resumeContext: resumeContext || undefined, isCodingRound },
+        { timeout: 90000 }
       );
       setSessionId(res.data.sessionId);
       setChatHistory([{ role: "ai", text: res.data.question, isInitial: true }]);
-      setCurrentDifficulty("Medium"); speak(res.data.question);
+      setCurrentDifficulty("Medium");
+      if (!isCodingRound) speak(res.data.question);
     } catch (err) {
       const isNetwork = !err.response;
       const onLiveSite = typeof window !== "undefined" && window.location.hostname.includes("vercel.app");
@@ -219,7 +316,7 @@ export default function Home() {
     setChatHistory(hist); setAnswer(""); setIsTyping(true);
     setTimeout(() => setIsAdjusting(true), 1200);
     try {
-      const res = await axios.post(`${apiBase}/interview/answer`, { sessionId, answer: userAns, userApiKey }, { timeout: 90000 });
+      const res = await axios.post(`${apiBase}/interview/answer`, { sessionId, answer: userAns, userApiKey, resumeContext: resumeContext || undefined, isCodingRound }, { timeout: 90000 });
       const updated = [...hist];
       updated[updated.length - 1].evaluation = res.data.evaluation;
       if (res.data.sessionSummary) {
@@ -228,7 +325,7 @@ export default function Home() {
         setCurrentDifficulty(res.data.sessionSummary.currentDifficulty || "Medium");
       }
       if (res.data.isComplete) { setFinalSummary(res.data.sessionSummary); setStage("dashboard"); }
-      else { updated.push({ role: "ai", text: res.data.nextQuestion, isFollowUp: true }); setChatHistory(updated); speak(res.data.nextQuestion); }
+      else { updated.push({ role: "ai", text: res.data.nextQuestion, isFollowUp: true }); setChatHistory(updated); if (!isCodingRound) speak(res.data.nextQuestion); }
     } catch (e) { console.error(e); }
     finally { setIsTyping(false); setIsAdjusting(false); }
   };
@@ -240,7 +337,7 @@ export default function Home() {
 
       {/* NAV */}
       <nav style={{ position: "fixed", top: 0, left: 0, right: 0, zIndex: 50, display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 40px", height: 64, borderBottom: "1px solid rgba(255,255,255,0.06)", background: "rgba(5,5,5,0.8)", backdropFilter: "blur(20px)" }}>
-        <span style={{ fontWeight: 900, letterSpacing: "0.18em", fontSize: 13, textTransform: "uppercase" }}>NEXUS<span style={{ color: "rgba(255,255,255,0.3)" }}>.AI</span></span>
+        <span style={{ fontWeight: 900, letterSpacing: "0.18em", fontSize: 13, textTransform: "uppercase" }}>Career<span style={{ color: "rgba(255,255,255,0.3)" }}>Forge</span></span>
         <div style={{ display: "flex", alignItems: "center", gap: 20 }}>
           {isLoaded && !userId && (
             <div style={{ border: "1px solid rgba(255,255,255,0.2)", borderRadius: 10, padding: "8px 20px", fontSize: 12, fontWeight: 600, cursor: "pointer", transition: "all .2s" }}>
@@ -292,7 +389,7 @@ export default function Home() {
                   onKeyDown={e => {
                     if (e.key === "Enter") {
                       if (apiKeyInput.trim().length < 10) { setApiKeyError("That doesn't look like a valid API key."); return; }
-                      sessionStorage.setItem("nexus_gemini_key", apiKeyInput.trim());
+                      sessionStorage.setItem("careerforge_gemini_key", apiKeyInput.trim());
                       setUserApiKey(apiKeyInput.trim());
                       setStage("role-selection");
                     }
@@ -307,7 +404,7 @@ export default function Home() {
                 <button
                   onClick={() => {
                     if (apiKeyInput.trim().length < 10) { setApiKeyError("That doesn't look like a valid API key."); return; }
-                    sessionStorage.setItem("nexus_gemini_key", apiKeyInput.trim());
+                    sessionStorage.setItem("careerforge_gemini_key", apiKeyInput.trim());
                     setUserApiKey(apiKeyInput.trim());
                     setStage("role-selection");
                   }}
@@ -353,10 +450,10 @@ export default function Home() {
                 </div>
 
                 {/* Tabs */}
-                <div style={{ display: "flex", background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 12, padding: 4, marginBottom: 28 }}>
-                  {["Technical", "HR & Culture", "System Design"].map(t => (
-                    <button key={t} onClick={() => setInterviewType(t)} style={{ flex: 1, padding: "9px 0", fontSize: 10, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", borderRadius: 9, border: "none", cursor: "pointer", background: interviewType === t ? "#fff" : "transparent", color: interviewType === t ? "#000" : "rgba(255,255,255,0.33)", transition: "all .2s" }}>
-                      {t}
+                <div style={{ display: "flex", background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 12, padding: 4, marginBottom: 28, flexWrap: "wrap", gap: 2 }}>
+                  {["Technical", "HR & Culture", "System Design", "Coding Round"].map(t => (
+                    <button key={t} onClick={() => setInterviewType(t)} style={{ flex: 1, minWidth: 80, padding: "9px 4px", fontSize: 9, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", borderRadius: 9, border: "none", cursor: "pointer", background: interviewType === t ? "#fff" : "transparent", color: interviewType === t ? "#000" : "rgba(255,255,255,0.33)", transition: "all .2s", display: "flex", alignItems: "center", justifyContent: "center", gap: 4 }}>
+                      {t === "Coding Round" && <Code2 size={10} />}{t}
                     </button>
                   ))}
                 </div>
@@ -383,8 +480,25 @@ export default function Home() {
                   onChange={e => setRole(e.target.value)}
                   onKeyDown={e => e.key === "Enter" && startInterview()}
                   placeholder="Enter job target (e.g. Senior Frontend Dev)"
-                  style={{ ...inputStyle, marginBottom: 16, fontSize: 14, padding: "13px 16px" }}
+                  style={{ ...inputStyle, marginBottom: 12, fontSize: 14, padding: "13px 16px" }}
                 />
+
+                {/* Resume upload */}
+                <div style={{ marginBottom: 16 }}>
+                  <label style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", background: "rgba(255,255,255,0.03)", border: `1px solid ${resumeContext ? "rgba(255,255,255,0.25)" : "rgba(255,255,255,0.08)"}`, borderRadius: 10, cursor: "pointer", transition: "all .2s" }}>
+                    <input type="file" accept=".pdf" style={{ display: "none" }} onChange={e => handleResumeUpload(e.target.files[0])} />
+                    {isParsingResume
+                      ? <Loader2 size={14} color="rgba(255,255,255,0.5)" style={{ animation: "spin 1s linear infinite" }} />
+                      : resumeContext
+                      ? <CheckCircle size={14} color="rgba(255,255,255,0.7)" />
+                      : <Upload size={14} color="rgba(255,255,255,0.35)" />}
+                    <span style={{ fontSize: 12, color: resumeContext ? "rgba(255,255,255,0.7)" : "rgba(255,255,255,0.3)" }}>
+                      {isParsingResume ? "Parsing resume…"
+                        : resumeContext ? `Resume loaded — ${resumeContext.recent_role || "profile extracted"}`
+                        : "Upload resume PDF (optional) — personalizes questions"}
+                    </span>
+                  </label>
+                </div>
 
                 {/* CTA */}
                 <button
@@ -445,6 +559,12 @@ export default function Home() {
                             <div style={{ width: "100%", height: 2, background: "rgba(255,255,255,0.08)", borderRadius: 99, marginBottom: 8 }}>
                               <div style={{ width: `${msg.evaluation.score * 10}%`, height: "100%", background: "#fff", borderRadius: 99 }} />
                             </div>
+                            {msg.evaluation.time_complexity && (
+                              <div style={{ display: "flex", gap: 10, marginBottom: 6 }}>
+                                <span style={{ fontSize: 10, color: "rgba(255,255,255,0.4)", fontFamily: "monospace" }}>T: {msg.evaluation.time_complexity}</span>
+                                <span style={{ fontSize: 10, color: "rgba(255,255,255,0.4)", fontFamily: "monospace" }}>S: {msg.evaluation.space_complexity}</span>
+                              </div>
+                            )}
                             <p style={{ margin: 0, fontSize: 11, color: "rgba(255,255,255,0.35)", fontStyle: "italic" }}>{msg.evaluation.suggestions}</p>
                           </div>
                         )}
@@ -469,18 +589,27 @@ export default function Home() {
                   {interviewType === "Technical" && "FORMAT: 1. Concept  2. Implementation  3. Edge Cases"}
                   {interviewType === "System Design" && "FORMAT: 1. Requirements  2. Architecture  3. Bottlenecks"}
                   {interviewType === "HR & Culture" && "STAR: Situation → Task → Action → Result"}
+                  {interviewType === "Coding Round" && "Write your solution then hit Submit — AI grades correctness, time & space complexity"}
                 </div>
 
                 {/* Input */}
                 <div style={{ padding: "14px 16px", borderTop: "1px solid rgba(255,255,255,0.06)", background: "rgba(0,0,0,0.3)", display: "flex", gap: 10, alignItems: "flex-end" }}>
-                  <button onClick={toggleRecording} style={{ width: 46, height: 46, borderRadius: 12, border: `1px solid ${isRecording ? "rgba(255,255,255,0.4)" : "rgba(255,255,255,0.1)"}`, background: isRecording ? "rgba(255,255,255,0.1)" : "rgba(255,255,255,0.03)", color: isRecording ? "#fff" : "rgba(255,255,255,0.35)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                    {isRecording ? <Mic size={18} /> : <MicOff size={18} />}
-                  </button>
+                  {!isCodingRound && (
+                    <button onClick={toggleRecording} style={{ width: 46, height: 46, borderRadius: 12, border: `1px solid ${isRecording ? "rgba(255,255,255,0.4)" : "rgba(255,255,255,0.1)"}`, background: isRecording ? "rgba(255,255,255,0.1)" : "rgba(255,255,255,0.03)", color: isRecording ? "#fff" : "rgba(255,255,255,0.35)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                      {isRecording ? <Mic size={18} /> : <MicOff size={18} />}
+                    </button>
+                  )}
                   <div style={{ flex: 1, position: "relative" }}>
-                    <textarea value={answer} onChange={e => setAnswer(e.target.value)}
-                      placeholder={isRecording ? "Listening…" : "Type your answer…"}
-                      rows={2}
-                      style={{ width: "100%", background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.09)", borderRadius: 12, padding: "11px 50px 11px 14px", fontSize: 13, color: "#fff", fontFamily: "monospace", outline: "none", resize: "none", boxSizing: "border-box" }} />
+                    {isCodingRound ? (
+                      <div style={{ paddingBottom: 44 }}>
+                        <CodeEditor value={answer} onChange={setAnswer} language={codeLanguage} onLanguageChange={setCodeLanguage} />
+                      </div>
+                    ) : (
+                      <textarea value={answer} onChange={e => setAnswer(e.target.value)}
+                        placeholder={isRecording ? "Listening…" : "Type your answer…"}
+                        rows={2}
+                        style={{ width: "100%", background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.09)", borderRadius: 12, padding: "11px 50px 11px 14px", fontSize: 13, color: "#fff", fontFamily: "monospace", outline: "none", resize: "none", boxSizing: "border-box" }} />
+                    )}
                     <button onClick={() => submitAnswer()} disabled={!answer.trim() || isTyping}
                       style={{ position: "absolute", right: 8, bottom: 8, width: 34, height: 34, borderRadius: 8, background: answer.trim() && !isTyping ? "#fff" : "rgba(255,255,255,0.1)", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
                       <Zap size={15} color={answer.trim() && !isTyping ? "#000" : "rgba(255,255,255,0.3)"} />
@@ -532,9 +661,14 @@ export default function Home() {
                   </div>
                 ))}
               </div>
-              <button onClick={() => window.location.reload()} style={{ width: "100%", padding: 14, borderRadius: 12, background: "#fff", color: "#000", fontWeight: 700, fontSize: 12, letterSpacing: "0.1em", textTransform: "uppercase", border: "none", cursor: "pointer" }}>
-                New Simulation
-              </button>
+              <div style={{ display: "flex", gap: 12, marginTop: 4 }}>
+                <button onClick={downloadReport} style={{ flex: 1, padding: 14, borderRadius: 12, background: "rgba(255,255,255,0.08)", color: "#fff", fontWeight: 700, fontSize: 12, letterSpacing: "0.1em", textTransform: "uppercase", border: "1px solid rgba(255,255,255,0.15)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
+                  <Download size={14} /> Download PDF Report
+                </button>
+                <button onClick={() => window.location.reload()} style={{ flex: 1, padding: 14, borderRadius: 12, background: "#fff", color: "#000", fontWeight: 700, fontSize: 12, letterSpacing: "0.1em", textTransform: "uppercase", border: "none", cursor: "pointer" }}>
+                  New Simulation
+                </button>
+              </div>
             </motion.div>
           )}
 

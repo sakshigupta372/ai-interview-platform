@@ -1,15 +1,15 @@
-# NEXUS.AI — Agentic Interview Simulation Platform
+# CareerForge — Agentic Interview Simulation Platform
 
 > **Live Demo → [ai-interview-platform-nr7v.vercel.app](https://ai-interview-platform-nr7v.vercel.app)**  
 > **GitHub → [sakshigupta372/ai-interview-platform](https://github.com/sakshigupta372/ai-interview-platform)**
 
-![NEXUS.AI Screenshot](./assets/screenshot.png)
+![CareerForge Screenshot](./assets/screenshot.png)
 
 ---
 
 ## What is this?
 
-NEXUS.AI is a **production-grade, agentic AI interview simulation engine** powered by Google Gemini. It runs a full multi-agent pipeline to generate adaptive questions, evaluate your answers in real time, and build a neural profile of your strengths and weaknesses — across 5 progressively harder questions.
+CareerForge is a **production-grade, agentic AI interview simulation engine** powered by Google Gemini. It runs a full multi-agent pipeline to generate adaptive questions, evaluate your answers in real time, and build a neural profile of your strengths and weaknesses — across 5 progressively harder questions.
 
 ---
 
