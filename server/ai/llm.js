@@ -13,9 +13,16 @@ function getAI(userApiKey) {
 
 async function generateQuestion(role, userApiKey) {
   const prompt = `
-You are a senior interviewer.
-Ask a technical interview question for a ${role}.
-Keep it realistic and not too easy. Do not include any extra text, just the question itself.
+You are a friendly but professional interviewer.
+Ask ONE opening interview question for a ${role}.
+
+Rules:
+- Start at MEDIUM difficulty — not beginner, not expert-level
+- The question should be clear and answerable in 2-4 sentences
+- Avoid multi-part questions (no "describe X, then explain Y, then list Z")
+- No obscure edge cases or PhD-level scenarios for the opening question
+- Ask about a single, well-known concept that a working professional would know
+- Do NOT include any intro text, just the question itself
 `;
 
   try {
