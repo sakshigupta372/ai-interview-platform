@@ -1,6 +1,7 @@
-const { getAI } = require("./llm");
+const { getAI, getFirstName, stripNamePlaceholders } = require("./llm");
 
-async function generateFollowUp(role, previousQuestion, userAnswer, evaluationScore, difficulty, userApiKey = null, isCodingRound = false) {
+async function generateFollowUp(role, previousQuestion, userAnswer, evaluationScore, difficulty, userApiKey = null, isCodingRound = false, resumeContext = null, candidateName = null) {
+  const firstName = getFirstName(resumeContext, candidateName);
   const prompt = isCodingRound ? `
 You are a technical interviewer conducting a coding interview for a ${role} position.
 
@@ -34,6 +35,7 @@ How to sound human:
 - ONE question only, concise, match the ${difficulty} level
 - Sound like a person on a video call, not a formal document
 - Output ONLY what the interviewer says next (reaction + question), nothing else
+${firstName ? `- You may use the candidate's first name (${firstName}) naturally — never [Candidate Name]` : "- Do not use name placeholders like [Candidate Name]"}
 `;
 
   try {
@@ -43,7 +45,7 @@ How to sound human:
       contents: prompt,
     });
     
-    return response.text.trim();
+    return stripNamePlaceholders(response.text.trim(), firstName);
   } catch (error) {
     console.error("Follow-Up Error:", error);
     throw new Error("Failed to generate follow-up question");

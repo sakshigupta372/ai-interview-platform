@@ -11,12 +11,12 @@ const MAX_QUESTIONS = 5;
 // 1. START INTERVIEW SESSION
 router.post("/start", async (req, res) => {
   try {
-    const { role, clerkId, userApiKey, resumeContext, isCodingRound } = req.body;
+    const { role, clerkId, userApiKey, resumeContext, isCodingRound, candidateName } = req.body;
     if (!role) {
       return res.status(400).json({ error: "Role is required" });
     }
 
-    const question = await generateQuestion(role, userApiKey, resumeContext || null, !!isCodingRound);
+    const question = await generateQuestion(role, userApiKey, resumeContext || null, !!isCodingRound, candidateName || null);
     const session = await sessionService.createSession(role, clerkId);
     await sessionService.updateCurrentQuestion(session.sessionId, question);
 
@@ -34,7 +34,7 @@ router.post("/start", async (req, res) => {
 // 2. SUBMIT ANSWER, EVALUATE & NEXT
 router.post("/answer", async (req, res) => {
   try {
-    const { sessionId, answer, userApiKey, resumeContext, isCodingRound } = req.body;
+    const { sessionId, answer, userApiKey, resumeContext, isCodingRound, candidateName } = req.body;
 
     if (!sessionId || !answer) {
       return res.status(400).json({ error: "sessionId and answer are required" });
@@ -88,7 +88,9 @@ router.post("/answer", async (req, res) => {
       evaluation.score,
       updatedSession.currentDifficulty,
       userApiKey,
-      !!isCodingRound
+      !!isCodingRound,
+      resumeContext || null,
+      candidateName || null
     );
 
     // Update session state in DB

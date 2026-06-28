@@ -9,7 +9,7 @@ import {
   Download, Upload, CheckCircle, FileText, Code2,
 } from "lucide-react";
 import { getApiBase } from "@/lib/api";
-import { useAuth, SignInButton, UserButton } from "@clerk/nextjs";
+import { useAuth, useUser, SignInButton, UserButton } from "@clerk/nextjs";
 import dynamic from "next/dynamic";
 
 const CodeEditor = dynamic(() => import("../../components/CodeEditor"), { ssr: false });
@@ -93,6 +93,7 @@ const inputStyle = { width: "100%", background: "rgba(255,255,255,0.05)", border
 // ─── Main ─────────────────────────────────────────────────────────────────────
 export default function Home() {
   const { userId, isLoaded } = useAuth();
+  const { user } = useUser();
 
   const [stage, setStage] = useState("role-selection");
   const [apiKeyInput, setApiKeyInput] = useState("");
@@ -108,6 +109,13 @@ export default function Home() {
   const [resumeFile, setResumeFile] = useState(null);
   const [resumeContext, setResumeContext] = useState(null);
   const [isParsingResume, setIsParsingResume] = useState(false);
+
+  const getCandidateName = () =>
+    resumeContext?.name ||
+    user?.firstName ||
+    user?.fullName?.split(" ")[0] ||
+    null;
+
   const [codeLanguage, setCodeLanguage] = useState("javascript");
 
   // After Clerk loads and user is signed in, check if we already have their key in sessionStorage.
@@ -285,7 +293,7 @@ export default function Home() {
     try {
       const res = await axios.post(
         `${apiBase}/interview/start`,
-        { role: ctx, clerkId: userId, userApiKey, resumeContext: resumeContext || undefined, isCodingRound },
+        { role: ctx, clerkId: userId, userApiKey, resumeContext: resumeContext || undefined, isCodingRound, candidateName: getCandidateName() || undefined },
         { timeout: 90000 }
       );
       setSessionId(res.data.sessionId);
@@ -316,7 +324,7 @@ export default function Home() {
     setChatHistory(hist); setAnswer(""); setIsTyping(true);
     setTimeout(() => setIsAdjusting(true), 1200);
     try {
-      const res = await axios.post(`${apiBase}/interview/answer`, { sessionId, answer: userAns, userApiKey, resumeContext: resumeContext || undefined, isCodingRound }, { timeout: 90000 });
+      const res = await axios.post(`${apiBase}/interview/answer`, { sessionId, answer: userAns, userApiKey, resumeContext: resumeContext || undefined, isCodingRound, candidateName: getCandidateName() || undefined }, { timeout: 90000 });
       const updated = [...hist];
       updated[updated.length - 1].evaluation = res.data.evaluation;
       if (res.data.sessionSummary) {
