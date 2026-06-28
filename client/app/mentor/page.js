@@ -9,6 +9,8 @@ import {
   FolderGit2, Sparkles, Loader2, AlertCircle, Activity,
 } from "lucide-react";
 
+import { getApiBase } from "../../lib/api";
+
 const panel = {
   background: "rgba(255,255,255,0.03)",
   border: "1px solid rgba(255,255,255,0.08)",
@@ -23,8 +25,6 @@ const label = {
   textTransform: "uppercase",
   color: "rgba(255,255,255,0.28)",
 };
-
-const apiBase = () => process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
 
 export default function MentorPage() {
   const { userId, isLoaded } = useAuth();
@@ -41,7 +41,7 @@ export default function MentorPage() {
     setLoading(true);
     setError("");
     try {
-      const res = await axios.get(`${apiBase()}/mentor/${userId}`);
+      const res = await axios.get(`${getApiBase()}/mentor/${userId}`);
       setStats(res.data.stats);
       setRoadmap(res.data.roadmap);
       setHasData(res.data.hasData);
@@ -69,7 +69,7 @@ export default function MentorPage() {
     setError("");
     try {
       const res = await axios.post(
-        `${apiBase()}/mentor/generate`,
+        `${getApiBase()}/mentor/generate`,
         { clerkId: userId, userApiKey, targetRole: targetRole || undefined },
         { timeout: 90000 }
       );
