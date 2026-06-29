@@ -35,7 +35,7 @@ app.use("/mentor", mentorRoute);
 app.use("/resume", resumeRoute);
 
 app.get("/", (req, res) => {
-  res.send("AI Interview Platform API + MongoDB Running...");
+  res.send("NEXUS.AI API + MongoDB Running...");
 });
 
 const PORT = process.env.PORT || 5000;

@@ -4,11 +4,15 @@ import { useState, useEffect, useRef } from "react";
 import axios from "axios";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  Loader2, Zap, BrainCircuit, Timer, ShieldAlert,
+  Loader2, Zap, ShieldAlert,
   Mic, MicOff, Rocket, Lightbulb, Target, Brain, Activity,
-  Download, Upload, CheckCircle, FileText, Code2,
+  Download, Upload, CheckCircle, Code2,
 } from "lucide-react";
 import { getApiBase } from "@/lib/api";
+import { APP_NAME, loadGeminiKey, saveGeminiKey } from "@/lib/brand";
+import CompanyPicker from "@/components/CompanyPicker";
+import InterviewHero from "@/components/InterviewHero";
+import { getCompany } from "@/lib/companies";
 import { useAuth, useUser, SignInButton, UserButton } from "@clerk/nextjs";
 import dynamic from "next/dynamic";
 
@@ -123,7 +127,7 @@ export default function Home() {
   useEffect(() => {
     if (!isLoaded) return;
     if (userId) {
-      const saved = sessionStorage.getItem("careerforge_gemini_key");
+      const saved = loadGeminiKey();
       if (saved) {
         setUserApiKey(saved);
       } else {
@@ -225,7 +229,7 @@ export default function Home() {
     let y = 20;
 
     doc.setFontSize(20); doc.setFont("helvetica", "bold");
-    doc.text("CareerForge — Interview Report", W / 2, y, { align: "center" }); y += 10;
+    doc.text(`${APP_NAME} — Interview Report`, W / 2, y, { align: "center" }); y += 10;
 
     doc.setFontSize(10); doc.setFont("helvetica", "normal");
     doc.setTextColor(120);
@@ -283,13 +287,15 @@ export default function Home() {
       (finalSummary.globalWeaknesses || []).forEach(w => { doc.setTextColor(100); doc.text(`— ${w}`, 18, y); y += 5; });
     }
 
-    doc.save(`careerforge-report-${Date.now()}.pdf`);
+    doc.save(`nexus-ai-report-${Date.now()}.pdf`);
   };
 
   const startInterview = async () => {
     if (!role || !userId) return;
     setIsTyping(true); setStage("interview");
-    const ctx = `A ${persona} acting as a ${interviewType} interviewer at ${company}, for a ${role} position.`;
+    const co = getCompany(company);
+    const companyLabel = company === "Agnostic" ? "a tech company" : company;
+    const ctx = `A ${persona} acting as a ${interviewType} interviewer at ${companyLabel} (${co.tagline}), for a ${role} position.`;
     try {
       const res = await axios.post(
         `${apiBase}/interview/start`,
@@ -334,7 +340,15 @@ export default function Home() {
       }
       if (res.data.isComplete) { setFinalSummary(res.data.sessionSummary); setStage("dashboard"); }
       else { updated.push({ role: "ai", text: res.data.nextQuestion, isFollowUp: true }); setChatHistory(updated); if (!isCodingRound) speak(res.data.nextQuestion); }
-    } catch (e) { console.error(e); }
+    } catch (err) {
+      const isNetwork = !err.response;
+      const msg = isNetwork
+        ? "Could not reach the server. Render may be waking up — wait ~60s and try again."
+        : err.response?.data?.error || `Server error ${err.response?.status || ""}`.trim();
+      alert(msg);
+      setChatHistory(hist.slice(0, -1));
+      setAnswer(userAns);
+    }
     finally { setIsTyping(false); setIsAdjusting(false); }
   };
 
@@ -345,7 +359,7 @@ export default function Home() {
 
       {/* NAV */}
       <nav style={{ position: "fixed", top: 0, left: 0, right: 0, zIndex: 50, display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 40px", height: 64, borderBottom: "1px solid rgba(255,255,255,0.06)", background: "rgba(5,5,5,0.8)", backdropFilter: "blur(20px)" }}>
-        <span style={{ fontWeight: 900, letterSpacing: "0.18em", fontSize: 13, textTransform: "uppercase" }}>Career<span style={{ color: "rgba(255,255,255,0.3)" }}>Forge</span></span>
+        <span style={{ fontWeight: 900, letterSpacing: "0.18em", fontSize: 13, textTransform: "uppercase" }}>NEXUS<span style={{ color: "rgba(255,255,255,0.3)" }}>.AI</span></span>
         <div style={{ display: "flex", alignItems: "center", gap: 20 }}>
           {isLoaded && !userId && (
             <div style={{ border: "1px solid rgba(255,255,255,0.2)", borderRadius: 10, padding: "8px 20px", fontSize: 12, fontWeight: 600, cursor: "pointer", transition: "all .2s" }}>
@@ -367,7 +381,7 @@ export default function Home() {
       </nav>
 
       {/* MAIN */}
-      <main style={{ position: "relative", zIndex: 10, minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", padding: "80px 24px 40px" }}>
+      <main style={{ position: "relative", zIndex: 10, minHeight: "100vh", display: "flex", alignItems: stage === "role-selection" ? "flex-start" : "center", justifyContent: "center", padding: stage === "role-selection" ? "96px 24px 48px" : "80px 24px 40px" }}>
         <AnimatePresence mode="wait">
 
           {/* ══ API KEY GATE ═══════════════════════════════════════════════════ */}
@@ -397,7 +411,7 @@ export default function Home() {
                   onKeyDown={e => {
                     if (e.key === "Enter") {
                       if (apiKeyInput.trim().length < 10) { setApiKeyError("That doesn't look like a valid API key."); return; }
-                      sessionStorage.setItem("careerforge_gemini_key", apiKeyInput.trim());
+                      saveGeminiKey(apiKeyInput);
                       setUserApiKey(apiKeyInput.trim());
                       setStage("role-selection");
                     }
@@ -412,7 +426,7 @@ export default function Home() {
                 <button
                   onClick={() => {
                     if (apiKeyInput.trim().length < 10) { setApiKeyError("That doesn't look like a valid API key."); return; }
-                    sessionStorage.setItem("careerforge_gemini_key", apiKeyInput.trim());
+                    saveGeminiKey(apiKeyInput);
                     setUserApiKey(apiKeyInput.trim());
                     setStage("role-selection");
                   }}
@@ -440,38 +454,61 @@ export default function Home() {
             </motion.div>
           )}
 
-          {/* ══ SETUP ══════════════════════════════════════════════════════════ */}
+          {/* ══ SETUP / LANDING ════════════════════════════════════════════════ */}
           {stage === "role-selection" && (
             <motion.div key="setup"
               initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -20 }} transition={{ duration: 0.45 }}
-              style={{ width: "100%", maxWidth: 500 }}
+              style={{ width: "100%", maxWidth: 1140 }}
+              className="landing-grid"
             >
-              <div style={{ ...panel, padding: "44px 40px" }}>
-                {/* Header */}
-                <div style={{ textAlign: "center", marginBottom: 36 }}>
-                  <div style={{ width: 56, height: 56, borderRadius: 16, background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.12)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 18px" }}>
-                    <BrainCircuit size={24} color="rgba(255,255,255,0.75)" />
-                  </div>
-                  <h1 style={{ fontSize: 30, fontWeight: 900, margin: 0, letterSpacing: "-0.02em" }}>Agentic Engine</h1>
-                  <p style={{ fontSize: 13, color: "rgba(255,255,255,0.35)", marginTop: 8 }}>Multi-Agent Interview Simulation Pipeline</p>
+              <InterviewHero
+                company={company}
+                persona={persona}
+                interviewType={interviewType}
+                role={role}
+                candidateName={getCandidateName()}
+              />
+
+              <div style={{ ...panel, padding: "32px 28px" }}>
+                <div style={{ textAlign: "center", marginBottom: 24 }}>
+                  <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.14em", textTransform: "uppercase", color: "rgba(255,255,255,0.28)", margin: "0 0 6px" }}>Configure session</p>
+                  <h2 style={{ fontSize: 22, fontWeight: 900, margin: 0, letterSpacing: "-0.02em" }}>Build your interview</h2>
                 </div>
 
-                {/* Tabs */}
-                <div style={{ display: "flex", background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 12, padding: 4, marginBottom: 28, flexWrap: "wrap", gap: 2 }}>
+                <div style={{ marginBottom: 22 }}>
+                  <CompanyPicker value={company} onChange={setCompany} />
+                  <p style={{ fontSize: 10, color: "rgba(255,255,255,0.22)", margin: "8px 0 0", textAlign: "center" }}>
+                    {getCompany(company).tagline} — questions match {company === "Agnostic" ? "your role" : `${getCompany(company).name}'s style`}
+                  </p>
+                </div>
+
+                {/* Interview type tabs */}
+                <div style={{ display: "flex", background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 12, padding: 4, marginBottom: 20, flexWrap: "wrap", gap: 2 }}>
                   {["Technical", "HR & Culture", "System Design", "Coding Round"].map(t => (
-                    <button key={t} onClick={() => setInterviewType(t)} style={{ flex: 1, minWidth: 80, padding: "9px 4px", fontSize: 9, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", borderRadius: 9, border: "none", cursor: "pointer", background: interviewType === t ? "#fff" : "transparent", color: interviewType === t ? "#000" : "rgba(255,255,255,0.33)", transition: "all .2s", display: "flex", alignItems: "center", justifyContent: "center", gap: 4 }}>
+                    <button key={t} onClick={() => setInterviewType(t)} style={{ flex: 1, minWidth: 72, padding: "9px 4px", fontSize: 9, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", borderRadius: 9, border: "none", cursor: "pointer", background: interviewType === t ? "#fff" : "transparent", color: interviewType === t ? "#000" : "rgba(255,255,255,0.33)", transition: "all .2s", display: "flex", alignItems: "center", justifyContent: "center", gap: 4 }}>
                       {t === "Coding Round" && <Code2 size={10} />}{t}
                     </button>
                   ))}
                 </div>
 
-                {/* Config grid */}
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 14, marginBottom: 20 }}>
+                {/* Role input */}
+                <div style={{ marginBottom: 14 }}>
+                  <span style={label}>Job you're interviewing for</span>
+                  <input
+                    type="text" value={role}
+                    onChange={e => setRole(e.target.value)}
+                    onKeyDown={e => e.key === "Enter" && startInterview()}
+                    placeholder="e.g. Senior DevOps Engineer"
+                    style={{ ...inputStyle, fontSize: 14, padding: "13px 16px" }}
+                  />
+                </div>
+
+                {/* Tone + Timer */}
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 16 }}>
                   {[
-                    { lbl: "Company", val: company, set: setCompany, opts: [["Agnostic","General"], ["Google","Google"], ["Amazon","Amazon"], ["Stripe","Stripe"]] },
-                    { lbl: "Tone", val: persona, set: setPersona, opts: [["Harsh Tech Lead","Strict"], ["Friendly Microsoft HR","Friendly"], ["Chaotic Startup Founder","Startup"]] },
-                    { lbl: "Timer", val: timerMode, set: setTimerMode, opts: [["Practice Mode","Practice"], ["Pressure Mode","Pressure"], ["Rapid Fire","Rapid 30s"]] },
+                    { lbl: "Interviewer style", val: persona, set: setPersona, opts: [["Harsh Tech Lead","Strict & direct"], ["Friendly Microsoft HR","Warm & structured"], ["Chaotic Startup Founder","Fast & casual"]] },
+                    { lbl: "Pace", val: timerMode, set: setTimerMode, opts: [["Practice Mode","No timer"], ["Pressure Mode","2 min / Q"], ["Rapid Fire","30 sec / Q"]] },
                   ].map(({ lbl, val, set, opts }) => (
                     <div key={lbl}>
                       <span style={label}>{lbl}</span>
@@ -482,17 +519,8 @@ export default function Home() {
                   ))}
                 </div>
 
-                {/* Role input */}
-                <input
-                  type="text" value={role}
-                  onChange={e => setRole(e.target.value)}
-                  onKeyDown={e => e.key === "Enter" && startInterview()}
-                  placeholder="Enter job target (e.g. Senior Frontend Dev)"
-                  style={{ ...inputStyle, marginBottom: 12, fontSize: 14, padding: "13px 16px" }}
-                />
-
                 {/* Resume upload */}
-                <div style={{ marginBottom: 16 }}>
+                <div style={{ marginBottom: 18 }}>
                   <label style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", background: "rgba(255,255,255,0.03)", border: `1px solid ${resumeContext ? "rgba(255,255,255,0.25)" : "rgba(255,255,255,0.08)"}`, borderRadius: 10, cursor: "pointer", transition: "all .2s" }}>
                     <input type="file" accept=".pdf" style={{ display: "none" }} onChange={e => handleResumeUpload(e.target.files[0])} />
                     {isParsingResume
@@ -501,9 +529,9 @@ export default function Home() {
                       ? <CheckCircle size={14} color="rgba(255,255,255,0.7)" />
                       : <Upload size={14} color="rgba(255,255,255,0.35)" />}
                     <span style={{ fontSize: 12, color: resumeContext ? "rgba(255,255,255,0.7)" : "rgba(255,255,255,0.3)" }}>
-                      {isParsingResume ? "Parsing resume…"
-                        : resumeContext ? `Resume loaded — ${resumeContext.recent_role || "profile extracted"}`
-                        : "Upload resume PDF (optional) — personalizes questions"}
+                      {isParsingResume ? "Reading your resume…"
+                        : resumeContext ? `Resume loaded — ${resumeContext.recent_role || "profile ready"}`
+                        : "Upload resume PDF — questions tailored to you"}
                     </span>
                   </label>
                 </div>
@@ -512,12 +540,18 @@ export default function Home() {
                 <button
                   onClick={startInterview}
                   disabled={!role || isTyping || !userId || !userApiKey}
-                  style={{ width: "100%", padding: "14px 0", borderRadius: 11, border: "none", cursor: (!role || !userId || isTyping || !userApiKey) ? "not-allowed" : "pointer", background: (!role || !userId || isTyping || !userApiKey) ? "rgba(255,255,255,0.1)" : "#fff", color: (!role || !userId || isTyping || !userApiKey) ? "rgba(255,255,255,0.35)" : "#000", fontWeight: 700, fontSize: 12, letterSpacing: "0.1em", textTransform: "uppercase", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, transition: "all .2s" }}>
+                  style={{ width: "100%", padding: "15px 0", borderRadius: 12, border: "none", cursor: (!role || !userId || isTyping || !userApiKey) ? "not-allowed" : "pointer", background: (!role || !userId || isTyping || !userApiKey) ? "rgba(255,255,255,0.1)" : "#fff", color: (!role || !userId || isTyping || !userApiKey) ? "rgba(255,255,255,0.35)" : "#000", fontWeight: 700, fontSize: 12, letterSpacing: "0.1em", textTransform: "uppercase", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, transition: "all .2s" }}>
                   {isTyping ? <Loader2 size={15} style={{ animation: "spin 1s linear infinite" }} /> :
-                    !userId ? <><ShieldAlert size={14} /> Sign in to access</> :
-                    !userApiKey ? <><span style={{ fontSize: 13 }}>🔑</span> Enter your Gemini API key</> :
-                    <><Rocket size={14} /> Start Simulation</>}
+                    !userId ? <><ShieldAlert size={14} /> Sign in to start</> :
+                    !userApiKey ? <><span style={{ fontSize: 13 }}>🔑</span> Add Gemini API key</> :
+                    <><Rocket size={14} /> Enter the interview room</>}
                 </button>
+
+                {userId && userApiKey && role && (
+                  <p style={{ textAlign: "center", fontSize: 10, color: "rgba(255,255,255,0.2)", marginTop: 12, fontFamily: "monospace" }}>
+                    {getCompany(company).name} · {interviewType} · 5 questions · ~15 min
+                  </p>
+                )}
               </div>
             </motion.div>
           )}
@@ -687,6 +721,21 @@ export default function Home() {
         @keyframes spin { to { transform: rotate(360deg); } }
         .bounce-dot { animation: bounce 0.6s ease-in-out infinite alternate; }
         @keyframes bounce { from { transform: scaleY(0.5); } to { transform: scaleY(1.2); } }
+        .landing-grid {
+          display: grid;
+          grid-template-columns: 1fr 400px;
+          gap: 48px;
+          align-items: start;
+        }
+        @media (max-width: 960px) {
+          .landing-grid {
+            grid-template-columns: 1fr;
+            gap: 32px;
+          }
+        }
+        @media (max-width: 480px) {
+          .company-grid { grid-template-columns: repeat(2, 1fr) !important; }
+        }
         select option { background: #111; }
         textarea::placeholder, input::placeholder { color: rgba(255,255,255,0.2); }
         * { box-sizing: border-box; }

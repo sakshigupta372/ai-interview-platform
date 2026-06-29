@@ -26,6 +26,30 @@ function stripNamePlaceholders(text, firstName) {
     .replace(/\[Name\]/gi, name);
 }
 
+function extractResponseText(response) {
+  if (!response) return "";
+  let text = response.text;
+  if (typeof text === "function") text = text();
+  return String(text || "").trim();
+}
+
+function hasUsableApiKey(userApiKey) {
+  const userKey = userApiKey?.trim();
+  const platformKey = process.env.GEMINI_API_KEY?.trim();
+  return (userKey && userKey.length > 10) || (platformKey && platformKey.length > 10);
+}
+
+function mapGeminiError(error) {
+  const msg = error?.message || String(error);
+  if (error?.status === 400 && /API key/i.test(msg)) {
+    return { status: 401, error: "Invalid Gemini API key. Get a fresh key at aistudio.google.com/apikey" };
+  }
+  if (error?.status === 429 || /quota|rate limit/i.test(msg)) {
+    return { status: 429, error: "Gemini rate limit hit. Wait a minute and try again." };
+  }
+  return { status: 500, error: "AI service error. Check your Gemini API key and try again." };
+}
+
 async function generateQuestion(role, userApiKey, resumeContext = null, isCodingRound = false, candidateName = null) {
   let prompt;
 
@@ -68,11 +92,22 @@ Rules:
       contents: prompt,
     });
     const firstName = getFirstName(resumeContext, candidateName);
-    return stripNamePlaceholders(response.text.trim(), firstName);
+    const text = extractResponseText(response);
+    if (!text) throw new Error("Gemini returned an empty response");
+    return stripNamePlaceholders(text, firstName);
   } catch (error) {
     console.error("AI Error:", error);
-    throw new Error("Failed to generate question");
+    throw error;
   }
 }
 
-module.exports = { generateQuestion, ai, getAI, getFirstName, stripNamePlaceholders };
+module.exports = {
+  generateQuestion,
+  ai,
+  getAI,
+  getFirstName,
+  stripNamePlaceholders,
+  extractResponseText,
+  hasUsableApiKey,
+  mapGeminiError,
+};

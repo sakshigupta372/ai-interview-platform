@@ -1,4 +1,4 @@
-const { getAI } = require("./llm");
+const { getAI, extractResponseText } = require("./llm");
 
 async function extractResumeContext(resumeText, userApiKey = null) {
   const prompt = `Extract key professional information from this resume for interview preparation.
@@ -24,7 +24,7 @@ Return ONLY a valid JSON object, no markdown, no extra text:
       model: "gemini-2.5-flash",
       contents: prompt,
     });
-    let text = response.text || "";
+    let text = extractResponseText(response);
     const first = text.indexOf("{");
     const last = text.lastIndexOf("}");
     if (first === -1 || last === -1) throw new Error("No JSON in response");

@@ -1,4 +1,4 @@
-const { getAI } = require("./llm");
+const { getAI, extractResponseText } = require("./llm");
 
 // Helper: sleep for ms milliseconds
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -58,10 +58,7 @@ Return ONLY a valid JSON object matching the schema exactly. No markdown blocks,
         contents: prompt,
       });
 
-      let textData = response.text || "";
-      if (typeof response.text === "function") {
-        textData = response.text();
-      }
+      let textData = extractResponseText(response);
 
       const firstBrace = textData.indexOf("{");
       const lastBrace = textData.lastIndexOf("}");

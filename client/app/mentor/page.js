@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 
 import { getApiBase } from "@/lib/api";
+import { loadGeminiKey } from "@/lib/brand";
 
 const panel = {
   background: "rgba(255,255,255,0.03)",
@@ -60,7 +61,7 @@ export default function MentorPage() {
   }, [userId, isLoaded]);
 
   const generatePlan = async () => {
-    const userApiKey = sessionStorage.getItem("careerforge_gemini_key");
+    const userApiKey = loadGeminiKey();
     if (!userApiKey) {
       setError("Add your Gemini API key on the home page first (Connect Your AI screen).");
       return;
@@ -76,7 +77,7 @@ export default function MentorPage() {
       setStats(res.data.stats);
       setRoadmap(res.data.roadmap);
     } catch (e) {
-      setError(e.response?.data?.error || "Failed to generate career plan.");
+      setError(e.response?.data?.error || "Failed to generate roadmap.");
     } finally {
       setGenerating(false);
     }
@@ -86,7 +87,7 @@ export default function MentorPage() {
     return (
       <div style={{ minHeight: "100vh", background: "#050505", display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 16, color: "#fff", fontFamily: "Inter, sans-serif" }}>
         <Activity size={28} style={{ opacity: 0.4 }} />
-        <span style={{ fontFamily: "monospace", fontSize: 11, letterSpacing: "0.12em", textTransform: "uppercase", color: "rgba(255,255,255,0.3)" }}>Loading Career Mentor...</span>
+        <span style={{ fontFamily: "monospace", fontSize: 11, letterSpacing: "0.12em", textTransform: "uppercase", color: "rgba(255,255,255,0.3)" }}>Loading Nexus Mentor...</span>
       </div>
     );
   }
@@ -107,7 +108,7 @@ export default function MentorPage() {
     <div style={{ minHeight: "100vh", background: "#050505", color: "#fff", fontFamily: "Inter, sans-serif", paddingBottom: 60 }}>
       <nav style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "20px 40px", borderBottom: "1px solid rgba(255,255,255,0.06)", background: "rgba(5,5,5,0.8)", backdropFilter: "blur(20px)", position: "sticky", top: 0, zIndex: 50 }}>
         <button onClick={() => (window.location.href = "/")} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, fontWeight: 600, color: "rgba(255,255,255,0.6)", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 10, padding: "8px 16px", cursor: "pointer" }}>
-          <ArrowLeft size={13} /> Simulator
+          <ArrowLeft size={13} /> NEXUS.AI
         </button>
         <div style={{ display: "flex", gap: 16, alignItems: "center" }}>
           <button onClick={() => (window.location.href = "/profile")} style={{ fontSize: 11, color: "rgba(255,255,255,0.45)", fontFamily: "monospace", background: "none", border: "none", cursor: "pointer" }}>History →</button>
@@ -120,7 +121,7 @@ export default function MentorPage() {
         <div style={{ marginBottom: 36 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 8 }}>
             <BrainCircuit size={24} color="rgba(255,255,255,0.5)" />
-            <h1 style={{ fontSize: 28, fontWeight: 900, margin: 0 }}>Career Mentor</h1>
+            <h1 style={{ fontSize: 28, fontWeight: 900, margin: 0 }}>Nexus Mentor</h1>
             <span style={{ fontSize: 9, fontWeight: 700, padding: "4px 10px", borderRadius: 99, border: "1px solid rgba(255,255,255,0.2)", color: "rgba(255,255,255,0.5)", letterSpacing: "0.08em" }}>V4</span>
           </div>
           <p style={{ fontSize: 13, color: "rgba(255,255,255,0.35)", margin: 0 }}>Weakness analysis · Learning roadmap · Recommended projects</p>
@@ -169,21 +170,21 @@ export default function MentorPage() {
             style={{ padding: "12px 24px", borderRadius: 11, border: "none", cursor: !hasData || generating ? "not-allowed" : "pointer", background: !hasData || generating ? "rgba(255,255,255,0.1)" : "#fff", color: !hasData || generating ? "rgba(255,255,255,0.35)" : "#000", fontWeight: 700, fontSize: 12, letterSpacing: "0.08em", textTransform: "uppercase", display: "flex", alignItems: "center", gap: 8 }}
           >
             {generating ? <Loader2 size={14} style={{ animation: "spin 1s linear infinite" }} /> : <Sparkles size={14} />}
-            {generating ? "Analyzing..." : roadmap ? "Regenerate Plan" : "Generate Career Plan"}
+            {generating ? "Analyzing..." : roadmap ? "Regenerate Plan" : "Generate Roadmap"}
           </button>
         </div>
 
         {!hasData && (
           <div style={{ ...panel, padding: 48, textAlign: "center" }}>
             <BookOpen size={36} style={{ color: "rgba(255,255,255,0.15)", margin: "0 auto 16px" }} />
-            <p style={{ fontSize: 14, color: "rgba(255,255,255,0.35)" }}>Complete at least one interview simulation to unlock your personalized career plan.</p>
+            <p style={{ fontSize: 14, color: "rgba(255,255,255,0.35)" }}>Complete at least one NEXUS.AI interview to unlock your personalized roadmap.</p>
             <button onClick={() => (window.location.href = "/")} style={{ marginTop: 20, padding: "10px 24px", borderRadius: 10, background: "#fff", color: "#000", border: "none", fontWeight: 700, fontSize: 12, cursor: "pointer" }}>Start Simulation</button>
           </div>
         )}
 
         {hasData && !roadmap && !generating && (
           <div style={{ ...panel, padding: 32, textAlign: "center", marginBottom: 32 }}>
-            <p style={{ fontSize: 13, color: "rgba(255,255,255,0.4)" }}>You have interview data. Click <strong>Generate Career Plan</strong> to get your AI roadmap.</p>
+            <p style={{ fontSize: 13, color: "rgba(255,255,255,0.4)" }}>You have interview data. Click <strong>Generate Roadmap</strong> to get your AI plan.</p>
           </div>
         )}
 

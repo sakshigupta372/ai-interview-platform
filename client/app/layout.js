@@ -5,8 +5,8 @@ import { ClerkProvider } from "@clerk/nextjs";
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
 
 export const metadata = {
-  title: "CareerForge — AI Interview Simulation Engine",
-  description: "Voice-Activated Multi-Agent Technical Interview Simulator powered by Gemini AI.",
+  title: "NEXUS.AI — AI Interview Simulation Engine",
+  description: "Voice-activated multi-agent technical interview simulator powered by Gemini AI.",
 };
 
 export default function RootLayout({ children }) {

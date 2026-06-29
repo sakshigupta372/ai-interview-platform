@@ -1,15 +1,15 @@
-# CareerForge — AI Interview Simulation Platform
+# NEXUS.AI — AI Interview Simulation Platform
 
 > **Live Demo → [ai-interview-platform-one-wine.vercel.app](https://ai-interview-platform-one-wine.vercel.app)**
 > **GitHub → [sakshigupta372/ai-interview-platform](https://github.com/sakshigupta372/ai-interview-platform)**
 
-![CareerForge Screenshot](./assets/screenshot.png)
+![NEXUS.AI Screenshot](./assets/screenshot.png)
 
 ---
 
 ## What is this?
 
-CareerForge is a **production-grade, agentic AI interview simulation engine** powered by Google Gemini. It runs a full multi-agent pipeline to generate adaptive questions, evaluate your answers in real time, and build a neural profile of your strengths and weaknesses — across 5 progressively harder questions.
+NEXUS.AI is a **production-grade, agentic AI interview simulation engine** powered by Google Gemini. It runs a full multi-agent pipeline to generate adaptive questions, evaluate your answers in real time, and build a neural profile of your strengths and weaknesses — across 5 progressively harder questions.
 
 Users bring their own Gemini API key (BYOK), upload their resume for personalised questions, and choose between voice answers, text answers, or a full coding round with a Monaco code editor.
 
@@ -65,7 +65,7 @@ Users bring their own Gemini API key (BYOK), upload their resume for personalise
 - Paste your own **Gemini API key** after login — zero platform rate limits
 - Key is stored in `sessionStorage` only — never sent to our database
 
-### 🧭 Career Mentor (V4)
+### 🧭 Nexus Mentor (V4)
 - Powered by your full interview history
 - **Weakness Analysis** — patterns, root causes, priority areas
 - **4-Week Learning Roadmap** — weekly topics, resources, and goals
@@ -144,7 +144,7 @@ npm install
 
 Create `server/.env`:
 ```env
-MONGO_URI=mongodb://localhost:27017/careerforge
+MONGO_URI=mongodb://localhost:27017/nexus-ai
 PORT=5000
 FRONTEND_URL=http://localhost:3000
 ```
@@ -231,12 +231,12 @@ FRONTEND_URL=    # https://your-app.vercel.app
 ## Project Structure
 
 ```
-careerforge/
+nexus-ai/
 ├── client/                      # Next.js frontend (Vercel)
 │   ├── app/
 │   │   ├── page.js              # Main interview simulator
 │   │   ├── profile/page.js      # Session history + charts
-│   │   └── mentor/page.js       # Career mentor (V4)
+│   │   └── mentor/page.js       # Nexus mentor (V4)
 │   └── components/
 │       └── CodeEditor.js        # Monaco editor wrapper
 │

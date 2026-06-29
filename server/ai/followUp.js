@@ -1,4 +1,4 @@
-const { getAI, getFirstName, stripNamePlaceholders } = require("./llm");
+const { getAI, getFirstName, stripNamePlaceholders, extractResponseText } = require("./llm");
 
 async function generateFollowUp(role, previousQuestion, userAnswer, evaluationScore, difficulty, userApiKey = null, isCodingRound = false, resumeContext = null, candidateName = null) {
   const firstName = getFirstName(resumeContext, candidateName);
@@ -45,10 +45,12 @@ ${firstName ? `- You may use the candidate's first name (${firstName}) naturally
       contents: prompt,
     });
     
-    return stripNamePlaceholders(response.text.trim(), firstName);
+    const text = extractResponseText(response);
+    if (!text) throw new Error("Gemini returned an empty response");
+    return stripNamePlaceholders(text, firstName);
   } catch (error) {
     console.error("Follow-Up Error:", error);
-    throw new Error("Failed to generate follow-up question");
+    throw error;
   }
 }
 

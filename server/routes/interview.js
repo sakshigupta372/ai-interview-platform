@@ -1,7 +1,7 @@
 const express = require("express");
 const router = express.Router();
 
-const { generateQuestion } = require("../ai/llm");
+const { generateQuestion, hasUsableApiKey, mapGeminiError } = require("../ai/llm");
 const { evaluateAnswer } = require("../ai/evaluate");
 const { generateFollowUp } = require("../ai/followUp");
 const sessionService = require("../services/session");
@@ -15,6 +15,9 @@ router.post("/start", async (req, res) => {
     if (!role) {
       return res.status(400).json({ error: "Role is required" });
     }
+    if (!hasUsableApiKey(userApiKey)) {
+      return res.status(400).json({ error: "Gemini API key required. Enter your key in the app before starting." });
+    }
 
     const question = await generateQuestion(role, userApiKey, resumeContext || null, !!isCodingRound, candidateName || null);
     const session = await sessionService.createSession(role, clerkId);
@@ -27,7 +30,8 @@ router.post("/start", async (req, res) => {
     });
   } catch (error) {
     console.error("Error starting session:", error);
-    res.status(500).json({ error: "Failed to start interview" });
+    const mapped = mapGeminiError(error);
+    res.status(mapped.status).json({ error: mapped.error });
   }
 });
 
@@ -107,7 +111,8 @@ router.post("/answer", async (req, res) => {
 
   } catch (error) {
     console.error("Error processing answer:", error);
-    res.status(500).json({ error: "Failed to process answer" });
+    const mapped = mapGeminiError(error);
+    res.status(mapped.status).json({ error: mapped.error });
   }
 });
 
