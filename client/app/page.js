@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { getApiBase } from "@/lib/api";
 import { APP_NAME, loadGeminiKey, saveGeminiKey } from "@/lib/brand";
+import { toast } from "@/lib/toast";
 import { speak as ttsSpeak, cancelSpeech, loadElevenLabsKey, saveElevenLabsKey } from "@/lib/tts";
 import { DeepgramSTT, loadDeepgramKey, saveDeepgramKey } from "@/lib/deepgramSTT";
 import CompanyPicker from "@/components/CompanyPicker";
@@ -227,6 +228,8 @@ export default function Home() {
       }
       const el = loadElevenLabsKey(); if (el) { setElevenLabsKey(el); setElInput(el); }
       const dg = loadDeepgramKey();   if (dg) { setDeepgramKey(dg);   setDgInput(dg); }
+      const drillRaw = sessionStorage.getItem("nexus_drill_context");
+      if (drillRaw) { try { setDrillMode(JSON.parse(drillRaw)); } catch {} sessionStorage.removeItem("nexus_drill_context"); }
     }
   }, [isLoaded, userId]);
 
@@ -258,6 +261,8 @@ export default function Home() {
   const [liveClarity, setLiveClarity] = useState(0);
   const [liveConfidence, setLiveConfidence] = useState(0);
   const [timeLeft, setTimeLeft] = useState(120);
+
+  const [drillMode, setDrillMode] = useState(null); // { weakness, drillQuestion }
 
   const [elevenLabsKey, setElevenLabsKey] = useState("");
   const [deepgramKey, setDeepgramKey] = useState("");
@@ -312,7 +317,7 @@ export default function Home() {
         recognitionRef.current.start();
         setIsRecording(true);
       } else {
-        alert("Use Chrome/Edge for voice, or add a Deepgram key for cross-browser support.");
+        toast.error("Use Chrome/Edge for voice, or add a Deepgram key for cross-browser support.");
       }
     }
   };
@@ -464,7 +469,7 @@ export default function Home() {
     try {
       await readSSEStream(
         `${apiBase}/interview/stream-start`,
-        { role: ctx, clerkId: userId, userApiKey, resumeContext: resumeContext || undefined, isCodingRound, candidateName: getCandidateName() || undefined },
+        { role: ctx, clerkId: userId, userApiKey, resumeContext: resumeContext || undefined, isCodingRound, candidateName: getCandidateName() || undefined, drillFocus: drillMode?.weakness || undefined },
         (chunk) => { accum += chunk; setStreamingText(accum); },
         (sid) => { setSessionId(sid); setCurrentDifficulty("Medium"); },
         (fullQuestion) => {
@@ -478,12 +483,12 @@ export default function Home() {
           const msg = missingApiUrl
             ? "Backend not configured. Set NEXT_PUBLIC_API_URL on Vercel to your Render URL, then redeploy."
             : err || "Could not reach the server. Render may be waking up (~60s on free tier). Wait a moment and try again.";
-          alert(msg);
+          toast.error(msg);
           setStage("role-selection");
         }
       );
     } catch (err) {
-      alert("Could not reach the server. Wait a moment and try again.");
+      toast.error("Could not reach the server. Wait a moment and try again.");
       setStage("role-selection");
     } finally {
       setIsTyping(false);
@@ -537,14 +542,14 @@ export default function Home() {
           setChatHistory(prev => [...prev, { role: "ai", text: fullQuestion, isFollowUp: true }]);
           if (!isCodingRound) speak(fullQuestion);
         },
-        (err) => { alert(err || "Could not get next question. Try again."); }
+        (err) => { toast.error(err || "Could not get next question. Try again."); }
       );
     } catch (err) {
       const isNetwork = !err.response;
       const msg = isNetwork
         ? "Could not reach the server. Render may be waking up — wait ~60s and try again."
         : err.response?.data?.error || `Server error ${err.response?.status || ""}`.trim();
-      alert(msg);
+      toast.error(msg);
       setChatHistory(hist.slice(0, -1));
       setAnswer(userAns);
       setIsAdjusting(false);
@@ -790,14 +795,26 @@ export default function Home() {
                   </label>
                 </div>
 
+                {/* Drill mode banner */}
+                {drillMode && (
+                  <div style={{ padding: "12px 16px", borderRadius: 10, background: "rgba(129,140,248,0.1)", border: "1px solid rgba(129,140,248,0.25)", marginBottom: 12, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <div>
+                      <p style={{ fontSize: 9, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "rgba(129,140,248,0.7)", margin: "0 0 2px" }}>Drill Mode Active</p>
+                      <p style={{ fontSize: 12, color: "rgba(255,255,255,0.6)", margin: 0 }}>{drillMode.weakness}</p>
+                    </div>
+                    <button onClick={() => setDrillMode(null)} style={{ background: "none", border: "none", cursor: "pointer", color: "rgba(255,255,255,0.3)", fontSize: 11 }}>✕</button>
+                  </div>
+                )}
+
                 {/* CTA */}
                 <button
                   onClick={startInterview}
                   disabled={!role || isTyping || !userId || !userApiKey}
-                  style={{ width: "100%", padding: "15px 0", borderRadius: 12, border: "none", cursor: (!role || !userId || isTyping || !userApiKey) ? "not-allowed" : "pointer", background: (!role || !userId || isTyping || !userApiKey) ? "rgba(255,255,255,0.1)" : "#fff", color: (!role || !userId || isTyping || !userApiKey) ? "rgba(255,255,255,0.35)" : "#000", fontWeight: 700, fontSize: 12, letterSpacing: "0.1em", textTransform: "uppercase", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, transition: "all .2s" }}>
+                  style={{ width: "100%", padding: "15px 0", borderRadius: 12, border: "none", cursor: (!role || !userId || isTyping || !userApiKey) ? "not-allowed" : "pointer", background: (!role || !userId || isTyping || !userApiKey) ? "rgba(255,255,255,0.1)" : drillMode ? "rgba(129,140,248,0.9)" : "#fff", color: (!role || !userId || isTyping || !userApiKey) ? "rgba(255,255,255,0.35)" : "#000", fontWeight: 700, fontSize: 12, letterSpacing: "0.1em", textTransform: "uppercase", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, transition: "all .2s" }}>
                   {isTyping ? <Loader2 size={15} style={{ animation: "spin 1s linear infinite" }} /> :
                     !userId ? <><ShieldAlert size={14} /> Sign in to start</> :
                     !userApiKey ? <><span style={{ fontSize: 13 }}>🔑</span> Add Gemini API key</> :
+                    drillMode ? <><Target size={14} /> Start Drill →</> :
                     <><Rocket size={14} /> Enter the interview room</>}
                 </button>
 

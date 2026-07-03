@@ -1,6 +1,8 @@
 import { Inter } from "next/font/google";
 import "./globals.css";
 import { ClerkProvider } from "@clerk/nextjs";
+import ToastContainer from "@/components/Toast";
+import OnboardingModal from "@/components/OnboardingModal";
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
 
@@ -13,7 +15,11 @@ export default function RootLayout({ children }) {
   return (
     <ClerkProvider>
       <html lang="en" className={`${inter.variable} h-full antialiased bg-black`}>
-        <body className="min-h-full flex flex-col bg-black">{children}</body>
+        <body className="min-h-full flex flex-col bg-black">
+          {children}
+          <ToastContainer />
+          <OnboardingModal />
+        </body>
       </html>
     </ClerkProvider>
   );

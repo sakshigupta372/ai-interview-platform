@@ -22,7 +22,7 @@ function sseWrite(res, data) {
 
 // 1. START — streaming version (creates session + streams opening question)
 router.post("/stream-start", async (req, res) => {
-  const { role, clerkId, userApiKey, resumeContext, isCodingRound, candidateName } = req.body;
+  const { role, clerkId, userApiKey, resumeContext, isCodingRound, candidateName, drillFocus } = req.body;
   if (!role) return res.status(400).json({ error: "Role is required" });
   if (!hasUsableApiKey(userApiKey)) return res.status(400).json({ error: "Gemini API key required." });
 
@@ -33,7 +33,7 @@ router.post("/stream-start", async (req, res) => {
     sseWrite(res, { type: "session", sessionId: session.sessionId });
 
     let fullQuestion = "";
-    const stream = streamQuestionChunks(role, userApiKey, resumeContext || null, !!isCodingRound, candidateName || null);
+    const stream = streamQuestionChunks(role, userApiKey, resumeContext || null, !!isCodingRound, candidateName || null, drillFocus || null);
     for await (const chunk of stream) {
       fullQuestion += chunk;
       sseWrite(res, { type: "chunk", text: chunk });

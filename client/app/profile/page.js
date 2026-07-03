@@ -5,6 +5,7 @@ import axios from "axios";
 import { useAuth, UserButton } from "@clerk/nextjs";
 import { Rocket, Target, ArrowLeft, BarChart3, BrainCircuit, Activity, Database, ChevronDown, ChevronUp, MessageSquare, TrendingUp, Trash2 } from "lucide-react";
 import { getApiBase } from "@/lib/api";
+import { toast } from "@/lib/toast";
 import { motion, AnimatePresence } from "framer-motion";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, BarChart, Bar, CartesianGrid } from "recharts";
 
@@ -85,8 +86,9 @@ function SessionCard({ session, index, onDelete }) {
     try {
       await axios.delete(`${getApiBase()}/interview/session/${session.sessionId}`);
       onDelete(session.sessionId);
+      toast.success("Session deleted.");
     } catch {
-      alert("Failed to delete. Try again.");
+      toast.error("Failed to delete. Try again.");
       setDeleting(false);
     }
   };

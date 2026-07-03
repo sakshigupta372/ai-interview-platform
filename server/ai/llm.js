@@ -101,9 +101,12 @@ Rules:
   }
 }
 
-function buildQuestionPrompt(role, resumeContext, isCodingRound, candidateName) {
+function buildQuestionPrompt(role, resumeContext, isCodingRound, candidateName, drillFocus = null) {
   if (isCodingRound) {
-    return `You are a technical interviewer conducting a coding interview for a ${role} position.
+    const drillLine = drillFocus
+      ? `\nFocus: This is a targeted drill. Design the problem to specifically test: "${drillFocus}".`
+      : "";
+    return `You are a technical interviewer conducting a coding interview for a ${role} position.${drillLine}
 Generate ONE coding problem. Include:
 1. Clear problem statement
 2. Input/Output format
@@ -119,7 +122,10 @@ Output ONLY the problem. No extra commentary.`;
   const resumeSection = resumeContext
     ? `\nCandidate Profile:${nameLine}\n- Recent Role: ${resumeContext.recent_role} at ${resumeContext.recent_company}\n- Experience: ${resumeContext.years_experience} years\n- Top Skills: ${(resumeContext.top_skills || []).join(", ")}\n- Background: ${resumeContext.summary}\n\nTailor the question to their specific background and the target role.`
     : `\nCandidate Profile:${nameLine}`;
-  return `You are a real human interviewer having a casual but professional conversation with a candidate for a ${role} role.${resumeSection}
+  const drillLine = drillFocus
+    ? `\n\nDRILL MODE: This is a targeted practice session. Open with a question that directly tests the candidate's weakness in: "${drillFocus}". Be natural — don't mention it's a drill.`
+    : "";
+  return `You are a real human interviewer having a casual but professional conversation with a candidate for a ${role} role.${resumeSection}${drillLine}
 
 Start the interview naturally — like you would in a real Zoom call or in-person interview. Sound warm, human, and direct.
 
@@ -132,8 +138,8 @@ Rules:
 - Output ONLY what the interviewer says (the question itself)`;
 }
 
-async function* streamQuestionChunks(role, userApiKey, resumeContext = null, isCodingRound = false, candidateName = null) {
-  const prompt = buildQuestionPrompt(role, resumeContext, isCodingRound, candidateName);
+async function* streamQuestionChunks(role, userApiKey, resumeContext = null, isCodingRound = false, candidateName = null, drillFocus = null) {
+  const prompt = buildQuestionPrompt(role, resumeContext, isCodingRound, candidateName, drillFocus);
   const firstName = getFirstName(resumeContext, candidateName);
   const client = getAI(userApiKey);
   const stream = await client.models.generateContentStream({

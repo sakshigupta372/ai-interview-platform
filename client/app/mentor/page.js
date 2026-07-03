@@ -7,10 +7,12 @@ import { motion } from "framer-motion";
 import {
   ArrowLeft, BrainCircuit, Target, TrendingUp, BookOpen,
   FolderGit2, Sparkles, Loader2, AlertCircle, Activity, Download,
+  Brain, Zap, ChevronRight, ListChecks,
 } from "lucide-react";
 
 import { getApiBase } from "@/lib/api";
 import { loadGeminiKey } from "@/lib/brand";
+import { toast } from "@/lib/toast";
 
 const panel = {
   background: "rgba(255,255,255,0.03)",
@@ -36,6 +38,9 @@ export default function MentorPage() {
   const [hasData, setHasData] = useState(false);
   const [error, setError] = useState("");
   const [targetRole, setTargetRole] = useState("");
+  const [activeTab, setActiveTab] = useState("roadmap"); // "roadmap" | "coach"
+  const [coachData, setCoachData] = useState(null);
+  const [coachLoading, setCoachLoading] = useState(false);
 
   const fetchProfile = async () => {
     if (!userId) return;
@@ -143,6 +148,33 @@ export default function MentorPage() {
     }
   };
 
+  const runCoach = async () => {
+    const userApiKey = loadGeminiKey();
+    if (!userApiKey) { toast.error("Add your Gemini API key on the home page first."); return; }
+    setCoachLoading(true);
+    setError("");
+    try {
+      const res = await axios.post(
+        `${getApiBase()}/coach/analyze/${userId}`,
+        { userApiKey, targetRole: targetRole || undefined },
+        { timeout: 60000 }
+      );
+      setCoachData(res.data);
+    } catch (e) {
+      const msg = e.response?.data?.error || "Failed to run coach analysis.";
+      setError(msg);
+      toast.error(msg);
+    } finally {
+      setCoachLoading(false);
+    }
+  };
+
+  const startDrill = (weakness) => {
+    if (typeof window === "undefined") return;
+    sessionStorage.setItem("nexus_drill_context", JSON.stringify({ weakness }));
+    window.location.href = "/";
+  };
+
   if (!isLoaded || loading) {
     return (
       <div style={{ minHeight: "100vh", background: "#050505", display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 16, color: "#fff", fontFamily: "Inter, sans-serif" }}>
@@ -178,13 +210,28 @@ export default function MentorPage() {
 
       <div style={{ maxWidth: 1100, margin: "0 auto", padding: "48px 32px 0" }}>
         {/* Header */}
-        <div style={{ marginBottom: 36 }}>
+        <div style={{ marginBottom: 28 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 8 }}>
             <BrainCircuit size={24} color="rgba(255,255,255,0.5)" />
             <h1 style={{ fontSize: 28, fontWeight: 900, margin: 0 }}>Nexus Mentor</h1>
             <span style={{ fontSize: 9, fontWeight: 700, padding: "4px 10px", borderRadius: 99, border: "1px solid rgba(255,255,255,0.2)", color: "rgba(255,255,255,0.5)", letterSpacing: "0.08em" }}>V4</span>
           </div>
-          <p style={{ fontSize: 13, color: "rgba(255,255,255,0.35)", margin: 0 }}>Weakness analysis · Learning roadmap · Recommended projects</p>
+          <p style={{ fontSize: 13, color: "rgba(255,255,255,0.35)", margin: "0 0 24px" }}>Weakness analysis · Learning roadmap · Recommended projects</p>
+
+          {/* Tabs */}
+          <div style={{ display: "flex", gap: 4, background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 12, padding: 4, width: "fit-content" }}>
+            {[
+              { id: "roadmap", icon: <BookOpen size={13} />, label: "Roadmap" },
+              { id: "coach",   icon: <Brain    size={13} />, label: "AI Coach" },
+            ].map(t => (
+              <button key={t.id} onClick={() => setActiveTab(t.id)}
+                style={{ display: "flex", alignItems: "center", gap: 7, padding: "8px 18px", borderRadius: 9, border: "none", cursor: "pointer", fontWeight: 700, fontSize: 12, letterSpacing: "0.05em", transition: "all .2s",
+                  background: activeTab === t.id ? "#fff" : "none",
+                  color: activeTab === t.id ? "#000" : "rgba(255,255,255,0.4)" }}>
+                {t.icon}{t.label}
+              </button>
+            ))}
+          </div>
         </div>
 
         {error && (
@@ -193,6 +240,103 @@ export default function MentorPage() {
             <span style={{ fontSize: 13, color: "rgba(255,180,180,0.9)" }}>{error}</span>
           </div>
         )}
+
+        {/* ══ COACH TAB ══════════════════════════════════════════════════════ */}
+        {activeTab === "coach" && (
+          <div>
+            {/* Analyze button */}
+            <div style={{ ...panel, padding: "24px 28px", marginBottom: 24, display: "flex", flexWrap: "wrap", gap: 16, alignItems: "center", justifyContent: "space-between" }}>
+              <div>
+                <p style={{ fontSize: 14, fontWeight: 700, margin: "0 0 4px" }}>Agentic Performance Analysis</p>
+                <p style={{ fontSize: 12, color: "rgba(255,255,255,0.35)", margin: 0 }}>
+                  AI observes your full history, identifies your biggest gap, and builds a targeted drill.
+                </p>
+              </div>
+              <button onClick={runCoach} disabled={!hasData || coachLoading}
+                style={{ padding: "12px 24px", borderRadius: 11, border: "none", cursor: !hasData || coachLoading ? "not-allowed" : "pointer", background: !hasData || coachLoading ? "rgba(255,255,255,0.1)" : "#fff", color: !hasData || coachLoading ? "rgba(255,255,255,0.35)" : "#000", fontWeight: 700, fontSize: 12, letterSpacing: "0.08em", textTransform: "uppercase", display: "flex", alignItems: "center", gap: 8 }}>
+                {coachLoading ? <Loader2 size={14} style={{ animation: "spin 1s linear infinite" }} /> : <Brain size={14} />}
+                {coachLoading ? "Analyzing..." : coachData ? "Re-analyze" : "Analyze Me"}
+              </button>
+            </div>
+
+            {!hasData && (
+              <div style={{ ...panel, padding: 48, textAlign: "center" }}>
+                <Brain size={36} style={{ color: "rgba(255,255,255,0.15)", margin: "0 auto 16px" }} />
+                <p style={{ fontSize: 14, color: "rgba(255,255,255,0.35)" }}>Complete at least one interview to unlock coach analysis.</p>
+                <button onClick={() => window.location.href = "/"} style={{ marginTop: 20, padding: "10px 24px", borderRadius: 10, background: "#fff", color: "#000", border: "none", fontWeight: 700, fontSize: 12, cursor: "pointer" }}>Start Interview</button>
+              </div>
+            )}
+
+            {coachData && (
+              <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+
+                {/* Insight */}
+                <div style={{ ...panel, padding: "22px 24px", borderColor: "rgba(129,140,248,0.2)" }}>
+                  <p style={{ fontSize: 9, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", color: "rgba(129,140,248,0.6)", margin: "0 0 8px" }}>Coach Insight</p>
+                  <p style={{ fontSize: 14, lineHeight: 1.65, color: "rgba(255,255,255,0.85)", margin: "0 0 10px" }}>{coachData.coaching.insight}</p>
+                  {coachData.coaching.encouragement && (
+                    <p style={{ fontSize: 12, color: "rgba(255,255,255,0.4)", fontStyle: "italic", margin: 0 }}>{coachData.coaching.encouragement}</p>
+                  )}
+                </div>
+
+                {/* Priority weakness + drill */}
+                <div style={{ ...panel, padding: "22px 24px" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 12 }}>
+                    <div style={{ flex: 1 }}>
+                      <p style={{ fontSize: 9, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", color: "rgba(255,200,80,0.6)", margin: "0 0 6px" }}>Priority Weakness</p>
+                      <p style={{ fontSize: 16, fontWeight: 700, color: "#fff", margin: "0 0 10px" }}>{coachData.coaching.priority_weakness}</p>
+                      <p style={{ fontSize: 9, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", color: "rgba(255,255,255,0.25)", margin: "0 0 6px" }}>Drill Question</p>
+                      <p style={{ fontSize: 13, color: "rgba(255,255,255,0.6)", lineHeight: 1.6, margin: "0 0 8px" }}>{coachData.coaching.drill_question}</p>
+                      {coachData.coaching.drill_tip && (
+                        <p style={{ fontSize: 11, color: "rgba(255,200,80,0.6)", fontStyle: "italic", borderLeft: "2px solid rgba(255,200,80,0.2)", paddingLeft: 10, margin: 0 }}>
+                          Tip: {coachData.coaching.drill_tip}
+                        </p>
+                      )}
+                    </div>
+                    <button onClick={() => startDrill(coachData.coaching.priority_weakness)}
+                      style={{ padding: "12px 20px", borderRadius: 11, background: "rgba(129,140,248,0.15)", border: "1px solid rgba(129,140,248,0.3)", color: "rgba(129,140,248,0.9)", fontWeight: 700, fontSize: 12, letterSpacing: "0.06em", textTransform: "uppercase", cursor: "pointer", display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+                      <Zap size={13} /> Drill it now →
+                    </button>
+                  </div>
+                </div>
+
+                {/* Next steps */}
+                {(coachData.coaching.next_steps || []).length > 0 && (
+                  <div style={{ ...panel, padding: "22px 24px" }}>
+                    <p style={{ fontSize: 9, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", color: "rgba(255,255,255,0.25)", margin: "0 0 14px", display: "flex", alignItems: "center", gap: 6 }}>
+                      <ListChecks size={11} /> This week's actions
+                    </p>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                      {coachData.coaching.next_steps.map((step, i) => (
+                        <div key={i} style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
+                          <span style={{ width: 22, height: 22, borderRadius: 6, background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 700, color: "rgba(255,255,255,0.4)", flexShrink: 0 }}>{i + 1}</span>
+                          <p style={{ fontSize: 13, color: "rgba(255,255,255,0.6)", lineHeight: 1.5, margin: 0 }}>{step}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Stats summary */}
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12 }}>
+                  {[
+                    ["Sessions", coachData.stats.sessionCount],
+                    ["Avg Score", coachData.stats.avgScore ? `${coachData.stats.avgScore}/10` : "—"],
+                    ["Tracked Gaps", coachData.stats.topWeaknesses?.length || 0],
+                  ].map(([l, v]) => (
+                    <div key={l} style={{ ...panel, padding: "16px 18px", textAlign: "center" }}>
+                      <p style={{ fontSize: 9, color: "rgba(255,255,255,0.25)", textTransform: "uppercase", letterSpacing: "0.08em", margin: "0 0 6px" }}>{l}</p>
+                      <p style={{ fontSize: 20, fontWeight: 900, margin: 0 }}>{v}</p>
+                    </div>
+                  ))}
+                </div>
+              </motion.div>
+            )}
+          </div>
+        )}
+
+        {/* ══ ROADMAP TAB ════════════════════════════════════════════════════ */}
+        {activeTab === "roadmap" && <>
 
         {/* Stats row */}
         {stats && (
@@ -358,6 +502,8 @@ export default function MentorPage() {
           </section>
         )}
       </div>
+
+        </> /* end roadmap tab */}
 
       <style>{`
         @keyframes spin { to { transform: rotate(360deg); } }
