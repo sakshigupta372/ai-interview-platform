@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import axios from "axios";
 import { useAuth, UserButton } from "@clerk/nextjs";
-import { Rocket, Target, ArrowLeft, BarChart3, BrainCircuit, Activity, Database, ChevronDown, ChevronUp, MessageSquare, TrendingUp } from "lucide-react";
+import { Rocket, Target, ArrowLeft, BarChart3, BrainCircuit, Activity, Database, ChevronDown, ChevronUp, MessageSquare, TrendingUp, Trash2 } from "lucide-react";
 import { getApiBase } from "@/lib/api";
 import { motion, AnimatePresence } from "framer-motion";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, BarChart, Bar, CartesianGrid } from "recharts";
@@ -72,22 +72,43 @@ function ChatTranscript({ session }) {
   );
 }
 
-function SessionCard({ session, index }) {
+function SessionCard({ session, index, onDelete }) {
   const [open, setOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const sessionScores = (session.history || []).map(h => h?.evaluation?.score ?? 0);
   const sessionAvg = sessionScores.length ? (sessionScores.reduce((a, b) => a + b, 0) / sessionScores.length).toFixed(1) : "—";
+
+  const handleDelete = async (e) => {
+    e.stopPropagation();
+    if (!confirm("Delete this session? This can't be undone.")) return;
+    setDeleting(true);
+    try {
+      await axios.delete(`${getApiBase()}/interview/session/${session.sessionId}`);
+      onDelete(session.sessionId);
+    } catch {
+      alert("Failed to delete. Try again.");
+      setDeleting(false);
+    }
+  };
 
   return (
     <motion.div
       initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, scale: 0.95 }}
       transition={{ delay: index * 0.06 }}
-      style={{ ...panel, padding: "22px 24px", position: "relative" }}
+      style={{ ...panel, padding: "22px 24px", position: "relative", opacity: deleting ? 0.5 : 1 }}
     >
-      {/* Difficulty badge */}
-      <div style={{ position: "absolute", top: 16, right: 16 }}>
+      {/* Difficulty badge + delete */}
+      <div style={{ position: "absolute", top: 14, right: 14, display: "flex", alignItems: "center", gap: 8 }}>
         <span style={{ fontSize: 9, fontWeight: 700, padding: "3px 10px", borderRadius: 99, border: "1px solid rgba(255,255,255,0.15)", color: "rgba(255,255,255,0.5)", textTransform: "uppercase", letterSpacing: "0.08em" }}>
           {session.currentDifficulty || "—"}
         </span>
+        <button onClick={handleDelete} disabled={deleting} title="Delete session"
+          style={{ background: "none", border: "none", cursor: "pointer", color: "rgba(255,255,255,0.2)", padding: 2, display: "flex", alignItems: "center" }}
+          onMouseEnter={e => e.currentTarget.style.color = "rgba(255,100,100,0.7)"}
+          onMouseLeave={e => e.currentTarget.style.color = "rgba(255,255,255,0.2)"}>
+          <Trash2 size={13} />
+        </button>
       </div>
 
       <h4 style={{ fontSize: 13, fontWeight: 700, margin: "0 0 4px", maxWidth: "78%", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{session.role}</h4>
@@ -169,6 +190,10 @@ export default function Profile() {
       .catch(err => console.error(err))
       .finally(() => setLoading(false));
   }, [userId, isLoaded]);
+
+  const handleDelete = (sessionId) => {
+    setSessions(prev => prev.filter(s => s.sessionId !== sessionId));
+  };
 
   if (!isLoaded || loading) {
     return (
@@ -304,7 +329,7 @@ export default function Profile() {
         ) : (
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(340px, 1fr))", gap: 16 }}>
             {sessions.map((session, i) => (
-              <SessionCard key={session.sessionId || i} session={session} index={i} />
+              <SessionCard key={session.sessionId || i} session={session} index={i} onDelete={handleDelete} />
             ))}
           </div>
         )}

@@ -6,7 +6,7 @@ import { useAuth, UserButton } from "@clerk/nextjs";
 import { motion } from "framer-motion";
 import {
   ArrowLeft, BrainCircuit, Target, TrendingUp, BookOpen,
-  FolderGit2, Sparkles, Loader2, AlertCircle, Activity,
+  FolderGit2, Sparkles, Loader2, AlertCircle, Activity, Download,
 } from "lucide-react";
 
 import { getApiBase } from "@/lib/api";
@@ -59,6 +59,66 @@ export default function MentorPage() {
     if (!isLoaded || !userId) return;
     fetchProfile();
   }, [userId, isLoaded]);
+
+  const downloadRoadmap = async () => {
+    if (!roadmap) return;
+    const { jsPDF } = await import("jspdf");
+    const doc = new jsPDF();
+    const W = doc.internal.pageSize.getWidth();
+    let y = 20;
+
+    doc.setFontSize(20); doc.setFont("helvetica", "bold");
+    doc.text("NEXUS.AI — Career Roadmap", W / 2, y, { align: "center" }); y += 10;
+    doc.setFontSize(10); doc.setFont("helvetica", "normal"); doc.setTextColor(120);
+    doc.text(`Target: ${roadmap.targetRole || "—"} · Generated ${new Date().toLocaleDateString()}`, W / 2, y, { align: "center" }); y += 16;
+
+    // Weakness analysis
+    if (roadmap.weakness_analysis) {
+      doc.setTextColor(0); doc.setFontSize(13); doc.setFont("helvetica", "bold");
+      doc.text("Weakness Analysis", 14, y); y += 8;
+      doc.setFontSize(9); doc.setFont("helvetica", "normal"); doc.setTextColor(40);
+      const sumLines = doc.splitTextToSize(roadmap.weakness_analysis.summary || "", W - 28);
+      doc.text(sumLines, 14, y); y += sumLines.length * 5 + 6;
+      (roadmap.weakness_analysis.priority_areas || []).forEach(a => {
+        doc.text(`• ${a}`, 18, y); y += 5;
+      });
+      y += 4;
+    }
+
+    // Learning roadmap
+    if ((roadmap.learning_roadmap || []).length) {
+      doc.setDrawColor(220); doc.line(14, y, W - 14, y); y += 8;
+      doc.setTextColor(0); doc.setFontSize(13); doc.setFont("helvetica", "bold");
+      doc.text("4-Week Learning Roadmap", 14, y); y += 8;
+      (roadmap.learning_roadmap || []).forEach(w => {
+        if (y > 250) { doc.addPage(); y = 20; }
+        doc.setFontSize(11); doc.setFont("helvetica", "bold"); doc.setTextColor(0);
+        doc.text(`Week ${w.week}: ${w.focus}`, 14, y); y += 6;
+        doc.setFontSize(9); doc.setFont("helvetica", "normal"); doc.setTextColor(60);
+        (w.topics || []).forEach(t => { doc.text(`  Topic: ${t}`, 16, y); y += 4; });
+        (w.resources || []).forEach(r => { doc.text(`  Resource: ${r}`, 16, y); y += 4; });
+        (w.goals || []).forEach(g => { doc.text(`  ✓ ${g}`, 16, y); y += 4; });
+        y += 4;
+      });
+    }
+
+    // Recommended projects
+    if ((roadmap.recommended_projects || []).length) {
+      doc.setDrawColor(220); doc.line(14, y, W - 14, y); y += 8;
+      doc.setTextColor(0); doc.setFontSize(13); doc.setFont("helvetica", "bold");
+      doc.text("Recommended Projects", 14, y); y += 8;
+      (roadmap.recommended_projects || []).forEach(p => {
+        if (y > 250) { doc.addPage(); y = 20; }
+        doc.setFontSize(11); doc.setFont("helvetica", "bold"); doc.setTextColor(0);
+        doc.text(`${p.title} [${p.difficulty}] ~${p.estimated_weeks}w`, 14, y); y += 6;
+        doc.setFontSize(9); doc.setFont("helvetica", "normal"); doc.setTextColor(60);
+        const dLines = doc.splitTextToSize(p.description || "", W - 28);
+        doc.text(dLines, 14, y); y += dLines.length * 4 + 4;
+      });
+    }
+
+    doc.save(`nexus-roadmap-${Date.now()}.pdf`);
+  };
 
   const generatePlan = async () => {
     const userApiKey = loadGeminiKey();
@@ -164,14 +224,25 @@ export default function MentorPage() {
               style={{ width: "100%", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 10, padding: "10px 14px", fontSize: 13, color: "#fff", outline: "none", boxSizing: "border-box" }}
             />
           </div>
-          <button
-            onClick={generatePlan}
-            disabled={!hasData || generating}
-            style={{ padding: "12px 24px", borderRadius: 11, border: "none", cursor: !hasData || generating ? "not-allowed" : "pointer", background: !hasData || generating ? "rgba(255,255,255,0.1)" : "#fff", color: !hasData || generating ? "rgba(255,255,255,0.35)" : "#000", fontWeight: 700, fontSize: 12, letterSpacing: "0.08em", textTransform: "uppercase", display: "flex", alignItems: "center", gap: 8 }}
-          >
-            {generating ? <Loader2 size={14} style={{ animation: "spin 1s linear infinite" }} /> : <Sparkles size={14} />}
-            {generating ? "Analyzing..." : roadmap ? "Regenerate Plan" : "Generate Roadmap"}
-          </button>
+          <div style={{ display: "flex", gap: 10 }}>
+            <button
+              onClick={generatePlan}
+              disabled={!hasData || generating}
+              style={{ padding: "12px 24px", borderRadius: 11, border: "none", cursor: !hasData || generating ? "not-allowed" : "pointer", background: !hasData || generating ? "rgba(255,255,255,0.1)" : "#fff", color: !hasData || generating ? "rgba(255,255,255,0.35)" : "#000", fontWeight: 700, fontSize: 12, letterSpacing: "0.08em", textTransform: "uppercase", display: "flex", alignItems: "center", gap: 8 }}
+            >
+              {generating ? <Loader2 size={14} style={{ animation: "spin 1s linear infinite" }} /> : <Sparkles size={14} />}
+              {generating ? "Analyzing..." : roadmap ? "Regenerate Plan" : "Generate Roadmap"}
+            </button>
+            {roadmap && (
+              <button
+                onClick={downloadRoadmap}
+                style={{ padding: "12px 20px", borderRadius: 11, border: "1px solid rgba(255,255,255,0.15)", cursor: "pointer", background: "rgba(255,255,255,0.05)", color: "rgba(255,255,255,0.7)", fontWeight: 700, fontSize: 12, letterSpacing: "0.08em", textTransform: "uppercase", display: "flex", alignItems: "center", gap: 8 }}
+              >
+                <Download size={14} />
+                Export PDF
+              </button>
+            )}
+          </div>
         </div>
 
         {!hasData && (

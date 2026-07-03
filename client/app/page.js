@@ -94,6 +94,53 @@ const panel = { background: "rgba(255,255,255,0.03)", border: "1px solid rgba(25
 const label = { fontSize: 10, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: "rgba(255,255,255,0.28)", marginBottom: 6, display: "block" };
 const inputStyle = { width: "100%", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 10, padding: "10px 14px", fontSize: 13, color: "#fff", outline: "none", boxSizing: "border-box" };
 
+// ─── Chat message with ideal-answer toggle ────────────────────────────────────
+function ChatMessage({ msg, isLast, isTyping }) {
+  const [showIdeal, setShowIdeal] = useState(false);
+  const ev = msg.evaluation;
+  return (
+    <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}
+      style={{ display: "flex", justifyContent: msg.role === "ai" ? "flex-start" : "flex-end", paddingLeft: msg.isFollowUp ? 24 : 0 }}>
+      <div style={{ maxWidth: "82%", borderRadius: msg.role === "ai" ? "4px 18px 18px 18px" : "18px 4px 18px 18px", padding: "14px 18px", background: msg.role === "ai" ? "rgba(255,255,255,0.04)" : "rgba(255,255,255,0.08)", border: `1px solid rgba(255,255,255,${msg.role === "ai" ? "0.07" : "0.13"})`, fontSize: 13, lineHeight: 1.65 }}>
+        {msg.role === "ai" && isLast && !ev && !isTyping
+          ? <TypewriterText text={msg.text} />
+          : <p style={{ margin: 0, whiteSpace: "pre-wrap" }}>{msg.text}</p>}
+        {ev && (
+          <div style={{ marginTop: 14, paddingTop: 14, borderTop: "1px solid rgba(255,255,255,0.08)" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+              <span style={{ fontSize: 10, color: "rgba(255,255,255,0.3)", letterSpacing: "0.08em", textTransform: "uppercase" }}>Neural Score</span>
+              <span style={{ fontSize: 18, fontWeight: 900, color: ev.score >= 7 ? "#fff" : "rgba(255,255,255,0.5)" }}>{ev.score}<span style={{ fontSize: 11, color: "rgba(255,255,255,0.2)" }}>/10</span></span>
+            </div>
+            <div style={{ width: "100%", height: 2, background: "rgba(255,255,255,0.08)", borderRadius: 99, marginBottom: 8 }}>
+              <div style={{ width: `${ev.score * 10}%`, height: "100%", background: "#fff", borderRadius: 99 }} />
+            </div>
+            {ev.time_complexity && (
+              <div style={{ display: "flex", gap: 10, marginBottom: 6 }}>
+                <span style={{ fontSize: 10, color: "rgba(255,255,255,0.4)", fontFamily: "monospace" }}>T: {ev.time_complexity}</span>
+                <span style={{ fontSize: 10, color: "rgba(255,255,255,0.4)", fontFamily: "monospace" }}>S: {ev.space_complexity}</span>
+              </div>
+            )}
+            <p style={{ margin: "0 0 8px", fontSize: 11, color: "rgba(255,255,255,0.35)", fontStyle: "italic" }}>{ev.suggestions}</p>
+            {ev.ideal_answer && (
+              <>
+                <button onClick={() => setShowIdeal(p => !p)}
+                  style={{ fontSize: 10, color: "rgba(255,255,255,0.3)", background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 6, padding: "4px 10px", cursor: "pointer", letterSpacing: "0.06em", textTransform: "uppercase" }}>
+                  {showIdeal ? "Hide" : "Show"} ideal answer
+                </button>
+                {showIdeal && (
+                  <div style={{ marginTop: 10, padding: "10px 14px", background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 10, fontSize: 12, color: "rgba(255,255,255,0.55)", lineHeight: 1.65, whiteSpace: "pre-wrap" }}>
+                    {ev.ideal_answer}
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        )}
+      </div>
+    </motion.div>
+  );
+}
+
 // ─── SSE streaming helper ─────────────────────────────────────────────────────
 async function readSSEStream(url, body, onChunk, onSession, onDone, onError) {
   let response;
@@ -713,32 +760,7 @@ export default function Home() {
                 {/* Messages */}
                 <div style={{ flex: 1, overflowY: "auto", padding: "20px", display: "flex", flexDirection: "column", gap: 16 }}>
                   {chatHistory.map((msg, i) => (
-                    <motion.div key={i} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}
-                      style={{ display: "flex", justifyContent: msg.role === "ai" ? "flex-start" : "flex-end", paddingLeft: msg.isFollowUp ? 24 : 0 }}>
-                      <div style={{ maxWidth: "82%", borderRadius: msg.role === "ai" ? "4px 18px 18px 18px" : "18px 4px 18px 18px", padding: "14px 18px", background: msg.role === "ai" ? "rgba(255,255,255,0.04)" : "rgba(255,255,255,0.08)", border: `1px solid rgba(255,255,255,${msg.role === "ai" ? "0.07" : "0.13"})`, fontSize: 13, lineHeight: 1.65 }}>
-                        {msg.role === "ai" && i === chatHistory.length - 1 && !msg.evaluation && !isTyping
-                          ? <TypewriterText text={msg.text} />
-                          : <p style={{ margin: 0, whiteSpace: "pre-wrap" }}>{msg.text}</p>}
-                        {msg.evaluation && (
-                          <div style={{ marginTop: 14, paddingTop: 14, borderTop: "1px solid rgba(255,255,255,0.08)" }}>
-                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-                              <span style={{ fontSize: 10, color: "rgba(255,255,255,0.3)", letterSpacing: "0.08em", textTransform: "uppercase" }}>Neural Score</span>
-                              <span style={{ fontSize: 18, fontWeight: 900, color: msg.evaluation.score >= 7 ? "#fff" : "rgba(255,255,255,0.5)" }}>{msg.evaluation.score}<span style={{ fontSize: 11, color: "rgba(255,255,255,0.2)" }}>/10</span></span>
-                            </div>
-                            <div style={{ width: "100%", height: 2, background: "rgba(255,255,255,0.08)", borderRadius: 99, marginBottom: 8 }}>
-                              <div style={{ width: `${msg.evaluation.score * 10}%`, height: "100%", background: "#fff", borderRadius: 99 }} />
-                            </div>
-                            {msg.evaluation.time_complexity && (
-                              <div style={{ display: "flex", gap: 10, marginBottom: 6 }}>
-                                <span style={{ fontSize: 10, color: "rgba(255,255,255,0.4)", fontFamily: "monospace" }}>T: {msg.evaluation.time_complexity}</span>
-                                <span style={{ fontSize: 10, color: "rgba(255,255,255,0.4)", fontFamily: "monospace" }}>S: {msg.evaluation.space_complexity}</span>
-                              </div>
-                            )}
-                            <p style={{ margin: 0, fontSize: 11, color: "rgba(255,255,255,0.35)", fontStyle: "italic" }}>{msg.evaluation.suggestions}</p>
-                          </div>
-                        )}
-                      </div>
-                    </motion.div>
+                    <ChatMessage key={i} msg={msg} isLast={i === chatHistory.length - 1} isTyping={isTyping} />
                   ))}
                   {/* Live streaming bubble */}
                   {streamingText && (

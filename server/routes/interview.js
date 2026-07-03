@@ -197,4 +197,16 @@ router.get("/user/:clerkId", async (req, res) => {
   }
 });
 
+// 5. DELETE SESSION
+router.delete("/session/:id", async (req, res) => {
+  try {
+    const deleted = await sessionService.deleteSession(req.params.id);
+    if (!deleted) return res.status(404).json({ error: "Session not found" });
+    res.json({ success: true });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Failed to delete session" });
+  }
+});
+
 module.exports = router;

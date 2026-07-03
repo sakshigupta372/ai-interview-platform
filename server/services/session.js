@@ -63,4 +63,8 @@ async function getSessionsByUser(clerkId) {
   return await SessionModel.find({ clerkId }).sort({ createdAt: -1 });
 }
 
-module.exports = { createSession, getSession, updateSessionData, updateCurrentQuestion, endSession, getSessionsByUser };
+async function deleteSession(sessionId) {
+  return await SessionModel.findOneAndDelete({ sessionId });
+}
+
+module.exports = { createSession, getSession, updateSessionData, updateCurrentQuestion, endSession, getSessionsByUser, deleteSession };
