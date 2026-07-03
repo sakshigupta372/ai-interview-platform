@@ -501,9 +501,7 @@ export default function MentorPage() {
             </div>
           </section>
         )}
-      </div>
-
-        </> /* end roadmap tab */}
+      </> /* end roadmap tab */}
 
       <style>{`
         @keyframes spin { to { transform: rotate(360deg); } }
@@ -512,6 +510,7 @@ export default function MentorPage() {
           .mentor-stats-grid { grid-template-columns: 1fr; }
         }
       `}</style>
+      </div>
     </div>
   );
 }

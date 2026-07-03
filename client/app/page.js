@@ -14,7 +14,6 @@ import { toast } from "@/lib/toast";
 import { speak as ttsSpeak, cancelSpeech, loadElevenLabsKey, saveElevenLabsKey } from "@/lib/tts";
 import { DeepgramSTT, loadDeepgramKey, saveDeepgramKey } from "@/lib/deepgramSTT";
 import CompanyPicker from "@/components/CompanyPicker";
-import InterviewHero from "@/components/InterviewHero";
 import InterviewerAvatar from "@/components/InterviewerAvatar";
 import { getCompany } from "@/lib/companies";
 import { useAuth, useUser, SignInButton, UserButton } from "@clerk/nextjs";
@@ -620,7 +619,7 @@ export default function Home() {
       </nav>
 
       {/* MAIN */}
-      <main style={{ position: "relative", zIndex: 10, minHeight: "100vh", display: "flex", alignItems: stage === "role-selection" ? "flex-start" : "center", justifyContent: "center", padding: stage === "role-selection" ? "96px 24px 48px" : "80px 24px 40px" }}>
+      <main style={{ position: "relative", zIndex: 10, minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", padding: "80px 24px 40px" }}>
         <AnimatePresence mode="wait">
 
           {/* ══ API KEY GATE ═══════════════════════════════════════════════════ */}
@@ -718,18 +717,9 @@ export default function Home() {
             <motion.div key="setup"
               initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -20 }} transition={{ duration: 0.45 }}
-              style={{ width: "100%", maxWidth: 1140 }}
-              className="landing-grid"
+              style={{ width: "100%", maxWidth: 520 }}
             >
-              <InterviewHero
-                company={company}
-                persona={persona}
-                interviewType={interviewType}
-                role={role}
-                candidateName={getCandidateName()}
-              />
-
-              <div style={{ ...panel, padding: "32px 28px" }}>
+              <div style={{ ...panel, padding: "36px 32px" }}>
                 <div style={{ textAlign: "center", marginBottom: 24 }}>
                   <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.14em", textTransform: "uppercase", color: "rgba(255,255,255,0.28)", margin: "0 0 6px" }}>Configure session</p>
                   <h2 style={{ fontSize: 22, fontWeight: 900, margin: 0, letterSpacing: "-0.02em" }}>Build your interview</h2>
@@ -1140,13 +1130,6 @@ export default function Home() {
           background: none; border: none; cursor: pointer;
         }
 
-        .landing-grid {
-          display: grid;
-          grid-template-columns: 1fr 400px;
-          gap: 48px;
-          align-items: start;
-        }
-
         .interview-grid {
           display: grid;
           grid-template-columns: 1fr 280px;
@@ -1181,7 +1164,6 @@ export default function Home() {
 
         /* ── Tablet ── */
         @media (max-width: 960px) {
-          .landing-grid { grid-template-columns: 1fr; gap: 32px; }
           .interview-grid { grid-template-columns: 1fr; height: auto; min-height: 90vh; }
           .interview-sidebar { flex-direction: row; overflow-x: auto; padding-bottom: 4px; }
           .interview-sidebar > div { min-width: 180px; flex-shrink: 0; }
