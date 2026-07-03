@@ -6,7 +6,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   Loader2, Zap, ShieldAlert,
   Mic, MicOff, Rocket, Lightbulb, Target, Brain, Activity,
-  Download, Upload, CheckCircle, Code2,
+  Download, Upload, CheckCircle, Code2, Key, X,
 } from "lucide-react";
 import { getApiBase } from "@/lib/api";
 import { APP_NAME, loadGeminiKey, saveGeminiKey } from "@/lib/brand";
@@ -94,6 +94,46 @@ const panel = { background: "rgba(255,255,255,0.03)", border: "1px solid rgba(25
 const label = { fontSize: 10, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: "rgba(255,255,255,0.28)", marginBottom: 6, display: "block" };
 const inputStyle = { width: "100%", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 10, padding: "10px 14px", fontSize: 13, color: "#fff", outline: "none", boxSizing: "border-box" };
 
+// ─── SSE streaming helper ─────────────────────────────────────────────────────
+async function readSSEStream(url, body, onChunk, onSession, onDone, onError) {
+  let response;
+  try {
+    response = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+  } catch (e) {
+    onError?.("Could not reach the server. Wait a moment and try again.");
+    return;
+  }
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({ error: "Stream failed" }));
+    onError?.(err.error || "Stream failed");
+    return;
+  }
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split("\n");
+    buffer = lines.pop();
+    for (const line of lines) {
+      if (!line.startsWith("data: ")) continue;
+      try {
+        const data = JSON.parse(line.slice(6));
+        if (data.type === "session") onSession?.(data.sessionId);
+        else if (data.type === "chunk") onChunk?.(data.text);
+        else if (data.type === "done") onDone?.(data.fullQuestion);
+        else if (data.type === "error") onError?.(data.error);
+      } catch {}
+    }
+  }
+}
+
 // ─── Main ─────────────────────────────────────────────────────────────────────
 export default function Home() {
   const { userId, isLoaded } = useAuth();
@@ -102,6 +142,8 @@ export default function Home() {
   const [stage, setStage] = useState("role-selection");
   const [apiKeyInput, setApiKeyInput] = useState("");
   const [apiKeyError, setApiKeyError] = useState("");
+  const [showKeyModal, setShowKeyModal] = useState(false);
+  const [streamingText, setStreamingText] = useState("");
   const [role, setRole] = useState("");
   const [persona, setPersona] = useState("Harsh Tech Lead");
   const [company, setCompany] = useState("Agnostic");
@@ -198,10 +240,21 @@ export default function Home() {
     return () => clearInterval(timerRef.current);
   }, [stage, isTyping, chatHistory.length, timerMode]);
 
-  useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [chatHistory, isTyping]);
+  useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [chatHistory, isTyping, streamingText]);
 
   const apiBase = getApiBase();
   const isCodingRound = interviewType === "Coding Round";
+
+  // ─── Change API key ──────────────────────────────────────────────────────
+  const handleChangeKey = () => { setApiKeyInput(""); setApiKeyError(""); setShowKeyModal(true); };
+  const confirmNewKey = () => {
+    if (apiKeyInput.trim().length < 10) { setApiKeyError("That doesn't look like a valid API key."); return; }
+    saveGeminiKey(apiKeyInput.trim());
+    setUserApiKey(apiKeyInput.trim());
+    setShowKeyModal(false);
+    setApiKeyInput("");
+    setApiKeyError("");
+  };
 
   const handleResumeUpload = async (file) => {
     if (!file) return;
@@ -292,54 +345,92 @@ export default function Home() {
 
   const startInterview = async () => {
     if (!role || !userId) return;
-    setIsTyping(true); setStage("interview");
+    setIsTyping(true);
+    setStreamingText("");
+    setChatHistory([]);
+    setStage("interview");
     const co = getCompany(company);
     const companyLabel = company === "Agnostic" ? "a tech company" : company;
     const ctx = `A ${persona} acting as a ${interviewType} interviewer at ${companyLabel} (${co.tagline}), for a ${role} position.`;
+    let accum = "";
     try {
-      const res = await axios.post(
-        `${apiBase}/interview/start`,
+      await readSSEStream(
+        `${apiBase}/interview/stream-start`,
         { role: ctx, clerkId: userId, userApiKey, resumeContext: resumeContext || undefined, isCodingRound, candidateName: getCandidateName() || undefined },
-        { timeout: 90000 }
+        (chunk) => { accum += chunk; setStreamingText(accum); },
+        (sid) => { setSessionId(sid); setCurrentDifficulty("Medium"); },
+        (fullQuestion) => {
+          setStreamingText("");
+          setChatHistory([{ role: "ai", text: fullQuestion, isInitial: true }]);
+          if (!isCodingRound) speak(fullQuestion);
+        },
+        (err) => {
+          const onLiveSite = typeof window !== "undefined" && window.location.hostname.includes("vercel.app");
+          const missingApiUrl = onLiveSite && apiBase.includes("localhost");
+          const msg = missingApiUrl
+            ? "Backend not configured. Set NEXT_PUBLIC_API_URL on Vercel to your Render URL, then redeploy."
+            : err || "Could not reach the server. Render may be waking up (~60s on free tier). Wait a moment and try again.";
+          alert(msg);
+          setStage("role-selection");
+        }
       );
-      setSessionId(res.data.sessionId);
-      setChatHistory([{ role: "ai", text: res.data.question, isInitial: true }]);
-      setCurrentDifficulty("Medium");
-      if (!isCodingRound) speak(res.data.question);
     } catch (err) {
-      const isNetwork = !err.response;
-      const onLiveSite = typeof window !== "undefined" && window.location.hostname.includes("vercel.app");
-      const missingApiUrl = onLiveSite && apiBase.includes("localhost");
-      const msg = missingApiUrl
-        ? "Backend not configured. Set NEXT_PUBLIC_API_URL on Vercel to your Render URL, then redeploy."
-        : isNetwork
-        ? "Could not reach the server. Render may be waking up (~60s on free tier). Wait a moment and try again."
-        : `Server error ${err.response?.status}: ${err.response?.data?.error || "Unknown error"}`;
-      alert(msg);
+      alert("Could not reach the server. Wait a moment and try again.");
       setStage("role-selection");
+    } finally {
+      setIsTyping(false);
     }
-    finally { setIsTyping(false); }
   };
 
   const submitAnswer = async (forced = null) => {
     if (isRecording) toggleRecording();
     if (synthRef.current?.speaking) synthRef.current.cancel();
-    const userAns = forced || answer; if (!userAns.trim()) return;
+    const userAns = forced || answer;
+    if (!userAns.trim()) return;
     clearInterval(timerRef.current);
     const hist = [...chatHistory, { role: "user", text: userAns }];
-    setChatHistory(hist); setAnswer(""); setIsTyping(true);
+    setChatHistory(hist);
+    setAnswer("");
+    setIsTyping(true);
+    setStreamingText("");
     setTimeout(() => setIsAdjusting(true), 1200);
     try {
-      const res = await axios.post(`${apiBase}/interview/answer`, { sessionId, answer: userAns, userApiKey, resumeContext: resumeContext || undefined, isCodingRound, candidateName: getCandidateName() || undefined }, { timeout: 90000 });
-      const updated = [...hist];
-      updated[updated.length - 1].evaluation = res.data.evaluation;
-      if (res.data.sessionSummary) {
-        setStrengths(res.data.sessionSummary.globalStrengths || []);
-        setWeaknesses(res.data.sessionSummary.globalWeaknesses || []);
-        setCurrentDifficulty(res.data.sessionSummary.currentDifficulty || "Medium");
+      // Step 1: fast evaluation (JSON)
+      const res = await axios.post(
+        `${apiBase}/interview/evaluate`,
+        { sessionId, answer: userAns, userApiKey, isCodingRound },
+        { timeout: 90000 }
+      );
+      const { evaluation, isComplete, sessionSummary, nextDifficulty } = res.data;
+      const withEval = [...hist];
+      withEval[withEval.length - 1].evaluation = evaluation;
+      setChatHistory(withEval);
+      setIsAdjusting(false);
+      if (sessionSummary) {
+        setStrengths(sessionSummary.globalStrengths || []);
+        setWeaknesses(sessionSummary.globalWeaknesses || []);
+        setCurrentDifficulty(sessionSummary.currentDifficulty || "Medium");
       }
-      if (res.data.isComplete) { setFinalSummary(res.data.sessionSummary); setStage("dashboard"); }
-      else { updated.push({ role: "ai", text: res.data.nextQuestion, isFollowUp: true }); setChatHistory(updated); if (!isCodingRound) speak(res.data.nextQuestion); }
+      if (isComplete) {
+        setFinalSummary(sessionSummary);
+        setStage("dashboard");
+        setIsTyping(false);
+        return;
+      }
+      // Step 2: stream next question
+      let accum = "";
+      await readSSEStream(
+        `${apiBase}/interview/stream-next`,
+        { sessionId, answer: userAns, userApiKey, resumeContext: resumeContext || undefined, isCodingRound, candidateName: getCandidateName() || undefined, evaluationScore: evaluation.score, nextDifficulty: nextDifficulty || currentDifficulty },
+        (chunk) => { accum += chunk; setStreamingText(accum); },
+        null,
+        (fullQuestion) => {
+          setStreamingText("");
+          setChatHistory(prev => [...prev, { role: "ai", text: fullQuestion, isFollowUp: true }]);
+          if (!isCodingRound) speak(fullQuestion);
+        },
+        (err) => { alert(err || "Could not get next question. Try again."); }
+      );
     } catch (err) {
       const isNetwork = !err.response;
       const msg = isNetwork
@@ -348,8 +439,10 @@ export default function Home() {
       alert(msg);
       setChatHistory(hist.slice(0, -1));
       setAnswer(userAns);
+      setIsAdjusting(false);
+    } finally {
+      setIsTyping(false);
     }
-    finally { setIsTyping(false); setIsAdjusting(false); }
   };
 
   // ─── Render ────────────────────────────────────────────────────────────────
@@ -357,10 +450,41 @@ export default function Home() {
     <div style={{ minHeight: "100vh", background: "#050505", color: "#fff", fontFamily: "'Inter', sans-serif", position: "relative" }}>
       <ShapeGrid />
 
+      {/* ── Change Key Modal ── */}
+      <AnimatePresence>
+        {showKeyModal && (
+          <motion.div key="key-modal"
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            style={{ position: "fixed", inset: 0, zIndex: 200, background: "rgba(0,0,0,0.75)", display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}
+            onClick={(e) => { if (e.target === e.currentTarget) setShowKeyModal(false); }}
+          >
+            <motion.div initial={{ scale: 0.95, y: 10 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.95, y: 10 }}
+              style={{ ...panel, padding: "36px 32px", width: "100%", maxWidth: 420, position: "relative" }}>
+              <button onClick={() => setShowKeyModal(false)} style={{ position: "absolute", top: 14, right: 14, background: "none", border: "none", color: "rgba(255,255,255,0.4)", cursor: "pointer", padding: 4 }}>
+                <X size={16} />
+              </button>
+              <h2 style={{ fontSize: 20, fontWeight: 900, margin: "0 0 6px" }}>Change Gemini Key</h2>
+              <p style={{ fontSize: 12, color: "rgba(255,255,255,0.35)", margin: "0 0 24px", lineHeight: 1.6 }}>Your current key will be replaced for this session.</p>
+              <input type="password" value={apiKeyInput}
+                onChange={e => { setApiKeyInput(e.target.value); setApiKeyError(""); }}
+                onKeyDown={e => e.key === "Enter" && confirmNewKey()}
+                placeholder="AIzaSy..." autoFocus
+                style={{ ...inputStyle, fontFamily: "monospace", letterSpacing: "0.06em", marginBottom: 8 }}
+              />
+              {apiKeyError && <p style={{ fontSize: 11, color: "rgba(255,80,80,0.85)", marginBottom: 12 }}>{apiKeyError}</p>}
+              <button onClick={confirmNewKey}
+                style={{ width: "100%", padding: "13px 0", borderRadius: 10, border: "none", cursor: "pointer", background: apiKeyInput.trim().length > 10 ? "#fff" : "rgba(255,255,255,0.1)", color: apiKeyInput.trim().length > 10 ? "#000" : "rgba(255,255,255,0.3)", fontWeight: 700, fontSize: 12, letterSpacing: "0.1em", textTransform: "uppercase", marginTop: 4 }}>
+                Update Key →
+              </button>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* NAV */}
-      <nav style={{ position: "fixed", top: 0, left: 0, right: 0, zIndex: 50, display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 40px", height: 64, borderBottom: "1px solid rgba(255,255,255,0.06)", background: "rgba(5,5,5,0.8)", backdropFilter: "blur(20px)" }}>
+      <nav style={{ position: "fixed", top: 0, left: 0, right: 0, zIndex: 50, display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 24px", height: 64, borderBottom: "1px solid rgba(255,255,255,0.06)", background: "rgba(5,5,5,0.8)", backdropFilter: "blur(20px)" }}>
         <span style={{ fontWeight: 900, letterSpacing: "0.18em", fontSize: 13, textTransform: "uppercase" }}>NEXUS<span style={{ color: "rgba(255,255,255,0.3)" }}>.AI</span></span>
-        <div style={{ display: "flex", alignItems: "center", gap: 20 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
           {isLoaded && !userId && (
             <div style={{ border: "1px solid rgba(255,255,255,0.2)", borderRadius: 10, padding: "8px 20px", fontSize: 12, fontWeight: 600, cursor: "pointer", transition: "all .2s" }}>
               <SignInButton mode="modal" />
@@ -368,12 +492,14 @@ export default function Home() {
           )}
           {isLoaded && userId && (
             <>
-              <button onClick={() => window.location.href = "/mentor"} style={{ fontSize: 11, color: "rgba(255,255,255,0.45)", fontFamily: "monospace", letterSpacing: "0.05em", background: "none", border: "none", cursor: "pointer" }}>
-                Mentor →
-              </button>
-              <button onClick={() => window.location.href = "/profile"} style={{ fontSize: 11, color: "rgba(255,255,255,0.45)", fontFamily: "monospace", letterSpacing: "0.05em", background: "none", border: "none", cursor: "pointer" }}>
-                History →
-              </button>
+              <button onClick={() => window.location.href = "/mentor"} className="nav-txt-btn">Mentor →</button>
+              <button onClick={() => window.location.href = "/profile"} className="nav-txt-btn">History →</button>
+              {userApiKey && (
+                <button onClick={handleChangeKey} title="Change Gemini API Key"
+                  style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, padding: "7px 10px", color: "rgba(255,255,255,0.4)", cursor: "pointer", display: "flex", alignItems: "center" }}>
+                  <Key size={13} />
+                </button>
+              )}
               <UserButton />
             </>
           )}
@@ -560,7 +686,8 @@ export default function Home() {
           {stage === "interview" && (
             <motion.div key="interview"
               initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-              style={{ width: "100%", maxWidth: 1100, display: "grid", gridTemplateColumns: "1fr 280px", gap: 16, height: "82vh" }}
+              style={{ width: "100%", maxWidth: 1100 }}
+              className="interview-grid"
             >
               {/* Chat */}
               <div style={{ ...panel, display: "flex", flexDirection: "column", overflow: "hidden" }}>
@@ -613,7 +740,20 @@ export default function Home() {
                       </div>
                     </motion.div>
                   ))}
-                  {isTyping && (
+                  {/* Live streaming bubble */}
+                  {streamingText && (
+                    <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}
+                      style={{ display: "flex", justifyContent: "flex-start" }}>
+                      <div style={{ maxWidth: "82%", borderRadius: "4px 18px 18px 18px", padding: "14px 18px", background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.07)", fontSize: 13, lineHeight: 1.65 }}>
+                        <p style={{ margin: 0, whiteSpace: "pre-wrap", color: "rgba(255,255,255,0.88)" }}>
+                          {streamingText}<span className="cursor-blink">▌</span>
+                        </p>
+                      </div>
+                    </motion.div>
+                  )}
+
+                  {/* Evaluating indicator (only while waiting for eval response, not while streaming) */}
+                  {isTyping && !streamingText && (
                     <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                       <div style={{ display: "flex", alignItems: "center", gap: 10, background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.07)", borderRadius: "4px 18px 18px 18px", padding: "12px 18px", width: "fit-content" }}>
                         {[0, 100, 200].map(d => <div key={d} className="bounce-dot" style={{ width: 5, height: d === 100 ? 14 : 8, background: "rgba(255,255,255,0.4)", borderRadius: 3, animationDelay: `${d}ms` }} />)}
@@ -661,7 +801,7 @@ export default function Home() {
               </div>
 
               {/* Sidebar */}
-              <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+              <div className="interview-sidebar">
                 <div style={{ ...panel, padding: 20 }}>
                   <p style={{ ...label, display: "flex", alignItems: "center", gap: 6, marginBottom: 16 }}><Activity size={12} /> Live Sensors</p>
                   <Meter label="Clarity" value={liveClarity} />
@@ -702,7 +842,7 @@ export default function Home() {
                 </p>
 
                 {/* Stats row */}
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 14, marginBottom: 32 }}>
+                <div className="dashboard-stats">
                   {[
                     ["Avg Score", `${avgScore}/10`],
                     ["Peak Difficulty", finalSummary.currentDifficulty],
@@ -747,7 +887,7 @@ export default function Home() {
 
                 {/* Strengths & Weaknesses */}
                 {(finalSummary.globalStrengths.length > 0 || finalSummary.globalWeaknesses.length > 0) && (
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 28 }}>
+                  <div className="sw-grid" style={{ marginBottom: 28 }}>
                     <div style={{ background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: 12, padding: "18px 20px" }}>
                       <p style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", color: "rgba(100,255,150,0.5)", marginBottom: 10 }}>Strengths</p>
                       {finalSummary.globalStrengths.length === 0
@@ -764,7 +904,7 @@ export default function Home() {
                 )}
 
                 {/* Actions */}
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
+                <div className="dashboard-actions">
                   <button onClick={downloadReport} style={{ padding: 14, borderRadius: 12, background: "rgba(255,255,255,0.06)", color: "#fff", fontWeight: 700, fontSize: 11, letterSpacing: "0.08em", textTransform: "uppercase", border: "1px solid rgba(255,255,255,0.12)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
                     <Download size={13} /> PDF Report
                   </button>
@@ -786,21 +926,76 @@ export default function Home() {
         @keyframes spin { to { transform: rotate(360deg); } }
         .bounce-dot { animation: bounce 0.6s ease-in-out infinite alternate; }
         @keyframes bounce { from { transform: scaleY(0.5); } to { transform: scaleY(1.2); } }
+        @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
+        .cursor-blink { animation: blink 0.75s ease-in-out infinite; }
+
+        .nav-txt-btn {
+          font-size: 11px; color: rgba(255,255,255,0.45);
+          font-family: monospace; letter-spacing: 0.05em;
+          background: none; border: none; cursor: pointer;
+        }
+
         .landing-grid {
           display: grid;
           grid-template-columns: 1fr 400px;
           gap: 48px;
           align-items: start;
         }
+
+        .interview-grid {
+          display: grid;
+          grid-template-columns: 1fr 280px;
+          gap: 16px;
+          height: 82vh;
+        }
+
+        .interview-sidebar {
+          display: flex;
+          flex-direction: column;
+          gap: 14px;
+        }
+
+        .dashboard-stats {
+          display: grid;
+          grid-template-columns: repeat(4, 1fr);
+          gap: 14px;
+          margin-bottom: 32px;
+        }
+
+        .sw-grid {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 16px;
+        }
+
+        .dashboard-actions {
+          display: grid;
+          grid-template-columns: 1fr 1fr 1fr;
+          gap: 12px;
+        }
+
+        /* ── Tablet ── */
         @media (max-width: 960px) {
-          .landing-grid {
-            grid-template-columns: 1fr;
-            gap: 32px;
-          }
+          .landing-grid { grid-template-columns: 1fr; gap: 32px; }
+          .interview-grid { grid-template-columns: 1fr; height: auto; min-height: 90vh; }
+          .interview-sidebar { flex-direction: row; overflow-x: auto; padding-bottom: 4px; }
+          .interview-sidebar > div { min-width: 180px; flex-shrink: 0; }
         }
-        @media (max-width: 480px) {
+
+        /* ── Mobile ── */
+        @media (max-width: 640px) {
+          .nav-txt-btn { display: none; }
+          .dashboard-stats { grid-template-columns: repeat(2, 1fr); }
+          .sw-grid { grid-template-columns: 1fr; }
+          .dashboard-actions { grid-template-columns: 1fr; }
+          .company-grid { grid-template-columns: repeat(4, 1fr) !important; }
+        }
+
+        @media (max-width: 420px) {
           .company-grid { grid-template-columns: repeat(2, 1fr) !important; }
+          .dashboard-stats { grid-template-columns: 1fr 1fr; }
         }
+
         select option { background: #111; }
         textarea::placeholder, input::placeholder { color: rgba(255,255,255,0.2); }
         * { box-sizing: border-box; }

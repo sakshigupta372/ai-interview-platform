@@ -233,7 +233,7 @@ export default function Profile() {
         </div>
 
         {/* Stats */}
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16, marginBottom: 40 }}>
+        <div className="profile-stats-grid" style={{ gap: 16, marginBottom: 40 }}>
           {[
             { icon: <Target size={20} />, label: "Total Simulations", value: totalInterviews },
             { icon: <BarChart3 size={20} />, label: "Avg Score", value: avgScore },
@@ -251,7 +251,7 @@ export default function Profile() {
 
         {/* Charts */}
         {sessions.length > 1 && (
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 40 }}>
+          <div className="profile-chart-grid" style={{ gap: 16, marginBottom: 40 }}>
             {/* Score Trend */}
             <div style={{ ...panel, padding: "24px" }}>
               <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 20 }}>
@@ -309,6 +309,14 @@ export default function Profile() {
           </div>
         )}
       </div>
+      <style>{`
+        .profile-stats-grid { display: grid; grid-template-columns: repeat(3, 1fr); }
+        .profile-chart-grid { display: grid; grid-template-columns: 1fr 1fr; }
+        @media (max-width: 700px) {
+          .profile-stats-grid { grid-template-columns: 1fr; }
+          .profile-chart-grid { grid-template-columns: 1fr; }
+        }
+      `}</style>
     </div>
   );
 }

@@ -1,114 +1,173 @@
 const express = require("express");
 const router = express.Router();
 
-const { generateQuestion, hasUsableApiKey, mapGeminiError } = require("../ai/llm");
+const { generateQuestion, streamQuestionChunks, hasUsableApiKey, mapGeminiError } = require("../ai/llm");
 const { evaluateAnswer } = require("../ai/evaluate");
-const { generateFollowUp } = require("../ai/followUp");
+const { generateFollowUp, streamFollowUpChunks } = require("../ai/followUp");
 const sessionService = require("../services/session");
 
 const MAX_QUESTIONS = 5;
 
-// 1. START INTERVIEW SESSION
-router.post("/start", async (req, res) => {
+function sseSetup(res) {
+  res.setHeader("Content-Type", "text/event-stream");
+  res.setHeader("Cache-Control", "no-cache");
+  res.setHeader("Connection", "keep-alive");
+  res.setHeader("X-Accel-Buffering", "no");
+  res.flushHeaders();
+}
+
+function sseWrite(res, data) {
+  res.write(`data: ${JSON.stringify(data)}\n\n`);
+}
+
+// 1. START — streaming version (creates session + streams opening question)
+router.post("/stream-start", async (req, res) => {
+  const { role, clerkId, userApiKey, resumeContext, isCodingRound, candidateName } = req.body;
+  if (!role) return res.status(400).json({ error: "Role is required" });
+  if (!hasUsableApiKey(userApiKey)) return res.status(400).json({ error: "Gemini API key required." });
+
+  sseSetup(res);
+
   try {
-    const { role, clerkId, userApiKey, resumeContext, isCodingRound, candidateName } = req.body;
-    if (!role) {
-      return res.status(400).json({ error: "Role is required" });
-    }
-    if (!hasUsableApiKey(userApiKey)) {
-      return res.status(400).json({ error: "Gemini API key required. Enter your key in the app before starting." });
+    const session = await sessionService.createSession(role, clerkId);
+    sseWrite(res, { type: "session", sessionId: session.sessionId });
+
+    let fullQuestion = "";
+    const stream = streamQuestionChunks(role, userApiKey, resumeContext || null, !!isCodingRound, candidateName || null);
+    for await (const chunk of stream) {
+      fullQuestion += chunk;
+      sseWrite(res, { type: "chunk", text: chunk });
     }
 
-    const question = await generateQuestion(role, userApiKey, resumeContext || null, !!isCodingRound, candidateName || null);
-    const session = await sessionService.createSession(role, clerkId);
-    await sessionService.updateCurrentQuestion(session.sessionId, question);
+    await sessionService.updateCurrentQuestion(session.sessionId, fullQuestion);
+    sseWrite(res, { type: "done", fullQuestion });
+    res.end();
+  } catch (error) {
+    console.error("stream-start error:", error);
+    const mapped = mapGeminiError(error);
+    sseWrite(res, { type: "error", error: mapped.error });
+    res.end();
+  }
+});
+
+// 2a. EVALUATE — scores the answer and saves to DB, returns evaluation + isComplete
+router.post("/evaluate", async (req, res) => {
+  try {
+    const { sessionId, answer, userApiKey, isCodingRound } = req.body;
+    if (!sessionId || !answer) return res.status(400).json({ error: "sessionId and answer are required" });
+
+    const session = await sessionService.getSession(sessionId);
+    if (!session) return res.status(404).json({ error: "Session not found" });
+    if (session.status === "completed") return res.status(400).json({ error: "Session already completed." });
+
+    const questionTheyAreAnswering = session.currentQuestion;
+    const currentDifficulty = session.currentDifficulty || "Medium";
+
+    const evaluation = await evaluateAnswer(questionTheyAreAnswering, answer, currentDifficulty, userApiKey, !!isCodingRound);
+
+    await sessionService.updateSessionData(
+      sessionId,
+      { question: questionTheyAreAnswering, answer, difficulty: currentDifficulty, evaluation },
+      evaluation
+    );
+
+    const updatedSession = await sessionService.getSession(sessionId);
+    const isComplete = updatedSession.history.length >= MAX_QUESTIONS;
+
+    if (isComplete) await sessionService.endSession(sessionId);
 
     res.json({
-      sessionId: session.sessionId,
-      role: session.role,
-      question: question
+      evaluation,
+      isComplete,
+      sessionSummary: updatedSession,
+      nextDifficulty: updatedSession.currentDifficulty,
     });
   } catch (error) {
-    console.error("Error starting session:", error);
+    console.error("evaluate error:", error);
     const mapped = mapGeminiError(error);
     res.status(mapped.status).json({ error: mapped.error });
   }
 });
 
-// 2. SUBMIT ANSWER, EVALUATE & NEXT
-router.post("/answer", async (req, res) => {
+// 2b. STREAM-NEXT — streams the follow-up question after evaluate
+router.post("/stream-next", async (req, res) => {
+  const { sessionId, answer, userApiKey, resumeContext, isCodingRound, candidateName, evaluationScore, nextDifficulty } = req.body;
+  if (!sessionId) return res.status(400).json({ error: "sessionId required" });
+
+  sseSetup(res);
+
   try {
-    const { sessionId, answer, userApiKey, resumeContext, isCodingRound, candidateName } = req.body;
-
-    if (!sessionId || !answer) {
-      return res.status(400).json({ error: "sessionId and answer are required" });
-    }
-
     const session = await sessionService.getSession(sessionId);
-    if (!session) {
-      return res.status(404).json({ error: "Session not found in DB" });
-    }
+    if (!session) { sseWrite(res, { type: "error", error: "Session not found" }); return res.end(); }
 
-    if (session.status === "completed") {
-      return res.status(400).json({ error: "This interview session is already completed." });
-    }
-
-    const questionTheyAreAnswering = session.currentQuestion;
-    const currentDifficulty = session.currentDifficulty || "Medium";
-
-    // 2. Ask Brain 2 (Evaluator) to score the answer and adapt difficulty
-    const evaluation = await evaluateAnswer(questionTheyAreAnswering, answer, currentDifficulty, userApiKey, !!isCodingRound);
-
-    // 3. Save Q&A and Strengths/Weaknesses to MongoDB
-    await sessionService.updateSessionData(
-      sessionId, 
-      {
-        question: questionTheyAreAnswering,
-        answer: answer,
-        difficulty: currentDifficulty,
-        evaluation: evaluation
-      },
-      evaluation
-    );
-
-    // 4. Check if interview is over 
-    const updatedSession = await sessionService.getSession(sessionId);
-
-    if (updatedSession.history.length >= MAX_QUESTIONS) {
-      await sessionService.endSession(sessionId);
-      return res.json({
-        evaluation,
-        isComplete: true,
-        message: "Interview complete! Data secured.",
-        sessionSummary: updatedSession
-      });
-    }
-
-    // 5. Ask Brain 3 (Follow-up) to generate the next adaptive question based on new Difficulty!
-    const nextQuestion = await generateFollowUp(
-      updatedSession.role,
-      questionTheyAreAnswering,
-      answer,
-      evaluation.score,
-      updatedSession.currentDifficulty,
+    let fullQuestion = "";
+    const stream = streamFollowUpChunks(
+      session.role,
+      session.currentQuestion,
+      answer || "",
+      evaluationScore ?? 5,
+      nextDifficulty || session.currentDifficulty || "Medium",
       userApiKey,
       !!isCodingRound,
       resumeContext || null,
       candidateName || null
     );
 
-    // Update session state in DB
+    for await (const chunk of stream) {
+      fullQuestion += chunk;
+      sseWrite(res, { type: "chunk", text: chunk });
+    }
+
+    await sessionService.updateCurrentQuestion(sessionId, fullQuestion);
+    sseWrite(res, { type: "done", fullQuestion });
+    res.end();
+  } catch (error) {
+    console.error("stream-next error:", error);
+    const mapped = mapGeminiError(error);
+    sseWrite(res, { type: "error", error: mapped.error });
+    res.end();
+  }
+});
+
+// 2. LEGACY — SUBMIT ANSWER, EVALUATE & NEXT (kept for backward compat)
+router.post("/answer", async (req, res) => {
+  try {
+    const { sessionId, answer, userApiKey, resumeContext, isCodingRound, candidateName } = req.body;
+    if (!sessionId || !answer) return res.status(400).json({ error: "sessionId and answer are required" });
+
+    const session = await sessionService.getSession(sessionId);
+    if (!session) return res.status(404).json({ error: "Session not found in DB" });
+    if (session.status === "completed") return res.status(400).json({ error: "This interview session is already completed." });
+
+    const questionTheyAreAnswering = session.currentQuestion;
+    const currentDifficulty = session.currentDifficulty || "Medium";
+    const evaluation = await evaluateAnswer(questionTheyAreAnswering, answer, currentDifficulty, userApiKey, !!isCodingRound);
+
+    await sessionService.updateSessionData(
+      sessionId,
+      { question: questionTheyAreAnswering, answer, difficulty: currentDifficulty, evaluation },
+      evaluation
+    );
+
+    const updatedSession = await sessionService.getSession(sessionId);
+    if (updatedSession.history.length >= MAX_QUESTIONS) {
+      await sessionService.endSession(sessionId);
+      return res.json({ evaluation, isComplete: true, message: "Interview complete!", sessionSummary: updatedSession });
+    }
+
+    const nextQuestion = await generateFollowUp(
+      updatedSession.role, questionTheyAreAnswering, answer,
+      evaluation.score, updatedSession.currentDifficulty, userApiKey,
+      !!isCodingRound, resumeContext || null, candidateName || null
+    );
     await sessionService.updateCurrentQuestion(sessionId, nextQuestion);
 
     res.json({
-      evaluation,
-      isComplete: false,
-      nextQuestion: nextQuestion,
+      evaluation, isComplete: false, nextQuestion,
       currentQuestionNumber: updatedSession.history.length + 1,
       totalQuestions: MAX_QUESTIONS,
-      sessionSummary: updatedSession // So the frontend gets live weaknesses!
+      sessionSummary: updatedSession,
     });
-
   } catch (error) {
     console.error("Error processing answer:", error);
     const mapped = mapGeminiError(error);
@@ -116,20 +175,18 @@ router.post("/answer", async (req, res) => {
   }
 });
 
-// 3. GET SESSION HISTORY FOR DASHBOARD 
+// 3. GET SESSION
 router.get("/session/:id", async (req, res) => {
   try {
     const session = await sessionService.getSession(req.params.id);
-    if (!session) {
-      return res.status(404).json({ error: "Session not found" });
-    }
+    if (!session) return res.status(404).json({ error: "Session not found" });
     res.json(session);
   } catch (error) {
     res.status(500).json({ error: "Database fetch failed" });
   }
 });
 
-// 4. GET ALL SESSIONS BY USER (CLERK ID)
+// 4. GET ALL SESSIONS BY USER
 router.get("/user/:clerkId", async (req, res) => {
   try {
     const sessions = await sessionService.getSessionsByUser(req.params.clerkId);

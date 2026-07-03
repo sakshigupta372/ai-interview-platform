@@ -136,7 +136,7 @@ export default function MentorPage() {
 
         {/* Stats row */}
         {stats && (
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16, marginBottom: 32 }}>
+          <div className="mentor-stats-grid" style={{ gap: 16, marginBottom: 32 }}>
             {[
               { icon: <Target size={18} />, label: "Sessions", value: stats.sessionCount },
               { icon: <TrendingUp size={18} />, label: "Avg Score", value: stats.avgScore ? `${stats.avgScore}/10` : "—" },
@@ -288,7 +288,13 @@ export default function MentorPage() {
         )}
       </div>
 
-      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+      <style>{`
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .mentor-stats-grid { display: grid; grid-template-columns: repeat(3, 1fr); }
+        @media (max-width: 700px) {
+          .mentor-stats-grid { grid-template-columns: 1fr; }
+        }
+      `}</style>
     </div>
   );
 }
