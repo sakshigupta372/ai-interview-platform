@@ -10,8 +10,11 @@ import {
 } from "lucide-react";
 import { getApiBase } from "@/lib/api";
 import { APP_NAME, loadGeminiKey, saveGeminiKey } from "@/lib/brand";
+import { speak as ttsSpeak, cancelSpeech, loadElevenLabsKey, saveElevenLabsKey } from "@/lib/tts";
+import { DeepgramSTT, loadDeepgramKey, saveDeepgramKey } from "@/lib/deepgramSTT";
 import CompanyPicker from "@/components/CompanyPicker";
 import InterviewHero from "@/components/InterviewHero";
+import InterviewerAvatar from "@/components/InterviewerAvatar";
 import { getCompany } from "@/lib/companies";
 import { useAuth, useUser, SignInButton, UserButton } from "@clerk/nextjs";
 import dynamic from "next/dynamic";
@@ -222,8 +225,25 @@ export default function Home() {
       } else {
         setStage("api-key");
       }
+      const el = loadElevenLabsKey(); if (el) { setElevenLabsKey(el); setElInput(el); }
+      const dg = loadDeepgramKey();   if (dg) { setDeepgramKey(dg);   setDgInput(dg); }
     }
   }, [isLoaded, userId]);
+
+  const playTone = (freq = 880, dur = 0.08) => {
+    try {
+      if (!audioCtxRef.current) audioCtxRef.current = new AudioContext();
+      const ctx = audioCtxRef.current;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain); gain.connect(ctx.destination);
+      osc.frequency.value = freq;
+      gain.gain.setValueAtTime(0.12, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + dur);
+      osc.start(ctx.currentTime);
+      osc.stop(ctx.currentTime + dur);
+    } catch {}
+  };
   const [currentDifficulty, setCurrentDifficulty] = useState("Medium");
   const [strengths, setStrengths] = useState([]);
   const [weaknesses, setWeaknesses] = useState([]);
@@ -239,12 +259,21 @@ export default function Home() {
   const [liveConfidence, setLiveConfidence] = useState(0);
   const [timeLeft, setTimeLeft] = useState(120);
 
+  const [elevenLabsKey, setElevenLabsKey] = useState("");
+  const [deepgramKey, setDeepgramKey] = useState("");
+  const [elInput, setElInput] = useState("");
+  const [dgInput, setDgInput] = useState("");
+  const [showVoiceKeys, setShowVoiceKeys] = useState(false);
+
   const recognitionRef = useRef(null);
   const synthRef = useRef(null);
   const chatEndRef = useRef(null);
+  const deepgramRef = useRef(null);
+  const audioCtxRef = useRef(null);
+  const dgInterimRef = useRef("");
   const timerRef = useRef(null);
 
-  // Voice setup
+  // Voice setup — browser SR as fallback
   useEffect(() => {
     if (typeof window === "undefined") return;
     synthRef.current = window.speechSynthesis;
@@ -257,15 +286,42 @@ export default function Home() {
   }, []);
 
   const toggleRecording = () => {
-    if (!recognitionRef.current) { alert("Use Chrome/Edge for voice."); return; }
-    if (isRecording) { recognitionRef.current.stop(); setIsRecording(false); }
-    else { setAnswer(""); recognitionRef.current.start(); setIsRecording(true); }
+    if (isRecording) {
+      if (deepgramRef.current) {
+        deepgramRef.current.stop();
+        deepgramRef.current = null;
+        setAnswer(prev => prev + (dgInterimRef.current ? " " + dgInterimRef.current : ""));
+        dgInterimRef.current = "";
+      } else if (recognitionRef.current) {
+        recognitionRef.current.stop();
+      }
+      setIsRecording(false);
+    } else {
+      setAnswer("");
+      dgInterimRef.current = "";
+      if (deepgramKey?.trim().length > 10) {
+        const dg = new DeepgramSTT(deepgramKey.trim());
+        deepgramRef.current = dg;
+        dg.start({
+          onInterim: (t) => { dgInterimRef.current = t; setAnswer(dgInterimRef.current); },
+          onFinal: (t) => { dgInterimRef.current = ""; setAnswer(prev => (prev + " " + t).trim()); },
+          onError: (e) => { console.warn("Deepgram:", e); deepgramRef.current = null; setIsRecording(false); },
+        });
+        setIsRecording(true);
+      } else if (recognitionRef.current) {
+        recognitionRef.current.start();
+        setIsRecording(true);
+      } else {
+        alert("Use Chrome/Edge for voice, or add a Deepgram key for cross-browser support.");
+      }
+    }
   };
 
   const speak = (text) => {
-    if (!synthRef.current) return; setIsAiSpeaking(true);
-    const u = new SpeechSynthesisUtterance(text); u.rate = 1.0; u.pitch = 0.9;
-    u.onend = () => setIsAiSpeaking(false); synthRef.current.speak(u);
+    ttsSpeak(text, persona, elevenLabsKey, {
+      onStart: () => setIsAiSpeaking(true),
+      onEnd:   () => setIsAiSpeaking(false),
+    });
   };
 
   // Live meters
@@ -277,12 +333,17 @@ export default function Home() {
     setLiveConfidence(Math.max(0, Math.min(100, words * 2 - h * 15)));
   }, [answer]);
 
-  // Timer
+  // Timer with audio cues
   useEffect(() => {
     if (stage !== "interview" || isTyping || timerMode === "Practice Mode") return;
     const start = timerMode === "Rapid Fire" ? 30 : 120; setTimeLeft(start);
     timerRef.current = setInterval(() => {
-      setTimeLeft(p => { if (p <= 1) { clearInterval(timerRef.current); submitAnswer("Time up."); return 0; } return p - 1; });
+      setTimeLeft(p => {
+        if (p <= 1) { clearInterval(timerRef.current); submitAnswer("Time up."); return 0; }
+        if (p === 30) playTone(440, 0.18);          // 30s warning — low tick
+        else if (p <= 10) playTone(660, 0.07);      // last 10s — faster ticking
+        return p - 1;
+      });
     }, 1000);
     return () => clearInterval(timerRef.current);
   }, [stage, isTyping, chatHistory.length, timerMode]);
@@ -431,7 +492,7 @@ export default function Home() {
 
   const submitAnswer = async (forced = null) => {
     if (isRecording) toggleRecording();
-    if (synthRef.current?.speaking) synthRef.current.cancel();
+    cancelSpeech();
     const userAns = forced || answer;
     if (!userAns.trim()) return;
     clearInterval(timerRef.current);
@@ -460,7 +521,7 @@ export default function Home() {
       }
       if (isComplete) {
         setFinalSummary(sessionSummary);
-        setStage("dashboard");
+        setStage("debrief");
         setIsTyping(false);
         return;
       }
@@ -618,11 +679,31 @@ export default function Home() {
                 </p>
 
                 {/* Reassurance badges */}
-                <div style={{ display: "flex", justifyContent: "center", gap: 16, marginTop: 20 }}>
+                <div style={{ display: "flex", justifyContent: "center", gap: 16, marginTop: 20, marginBottom: 20 }}>
                   {["🔒 Client-side only", "🚫 Never logged", "♻️ Cached for session"].map(t => (
                     <span key={t} style={{ fontSize: 10, color: "rgba(255,255,255,0.2)", fontFamily: "monospace" }}>{t}</span>
                   ))}
                 </div>
+
+                {/* Optional premium voice keys */}
+                <button onClick={() => setShowVoiceKeys(p => !p)}
+                  style={{ width: "100%", background: "none", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 10, padding: "10px 14px", cursor: "pointer", color: "rgba(255,255,255,0.35)", fontSize: 11, textAlign: "left", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <span>🎙 Optional: Premium Voice (ElevenLabs + Deepgram)</span>
+                  <span style={{ fontSize: 10 }}>{showVoiceKeys ? "▲" : "▼"}</span>
+                </button>
+                {showVoiceKeys && (
+                  <div style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 8, textAlign: "left" }}>
+                    <p style={{ fontSize: 10, color: "rgba(255,255,255,0.25)", margin: "0 0 4px", lineHeight: 1.6 }}>
+                      Leave blank to use free browser TTS/STT. Add keys for human-quality AI voice and cross-browser mic support.
+                    </p>
+                    <input type="password" value={elInput} onChange={e => setElInput(e.target.value)} onBlur={() => { if (elInput.trim().length > 10) { setElevenLabsKey(elInput.trim()); saveElevenLabsKey(elInput.trim()); }}}
+                      placeholder="ElevenLabs API key (optional)"
+                      style={{ ...inputStyle, fontSize: 12, padding: "10px 14px", fontFamily: "monospace" }} />
+                    <input type="password" value={dgInput} onChange={e => setDgInput(e.target.value)} onBlur={() => { if (dgInput.trim().length > 10) { setDeepgramKey(dgInput.trim()); saveDeepgramKey(dgInput.trim()); }}}
+                      placeholder="Deepgram API key (optional)"
+                      style={{ ...inputStyle, fontSize: 12, padding: "10px 14px", fontFamily: "monospace" }} />
+                  </div>
+                )}
               </div>
             </motion.div>
           )}
@@ -741,7 +822,7 @@ export default function Home() {
                 {/* Header */}
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "14px 20px", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                    <div style={{ width: 8, height: 8, borderRadius: "50%", background: isAiSpeaking ? "#fff" : isRecording ? "rgba(255,255,255,0.6)" : "rgba(255,255,255,0.25)" }} />
+                    <InterviewerAvatar persona={persona} isSpeaking={isAiSpeaking} isListening={isRecording} />
                     <div>
                       <p style={{ fontWeight: 700, fontSize: 13, margin: 0 }}>{persona}</p>
                       <p style={{ fontSize: 10, color: "rgba(255,255,255,0.3)", margin: 0, letterSpacing: "0.06em", textTransform: "uppercase" }}>{interviewType} · {company}</p>
@@ -750,7 +831,7 @@ export default function Home() {
                   <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
                     <span style={{ fontSize: 10, fontWeight: 700, padding: "4px 12px", borderRadius: 99, border: "1px solid rgba(255,255,255,0.2)", color: "#fff", letterSpacing: "0.06em", textTransform: "uppercase" }}>{currentDifficulty}</span>
                     {timerMode !== "Practice Mode" && (
-                      <span style={{ fontFamily: "monospace", fontSize: 13, fontWeight: 700, padding: "4px 12px", borderRadius: 8, border: `1px solid ${timeLeft <= 15 ? "rgba(255,255,255,0.6)" : "rgba(255,255,255,0.1)"}`, color: timeLeft <= 15 ? "#fff" : "rgba(255,255,255,0.45)" }}>
+                      <span className={timeLeft <= 10 ? "timer-urgent" : ""} style={{ fontFamily: "monospace", fontSize: 13, fontWeight: 700, padding: "4px 12px", borderRadius: 8, border: `1px solid ${timeLeft <= 15 ? "rgba(255,255,255,0.6)" : "rgba(255,255,255,0.1)"}`, color: timeLeft <= 15 ? "#fff" : "rgba(255,255,255,0.45)" }}>
                         {Math.floor(timeLeft / 60)}:{String(timeLeft % 60).padStart(2, "0")}
                       </span>
                     )}
@@ -846,6 +927,89 @@ export default function Home() {
                     {strengths.length === 0 ? <p style={{ fontSize: 11, color: "rgba(255,255,255,0.15)", fontStyle: "italic" }}>None yet</p>
                       : strengths.map((s, i) => <p key={i} style={{ fontSize: 11, color: "rgba(255,255,255,0.5)", marginBottom: 4 }}>+ {s}</p>)}
                   </div>
+                </div>
+              </div>
+            </motion.div>
+          )}
+
+          {/* ══ DEBRIEF ══════════════════════════════════════════════════════ */}
+          {stage === "debrief" && finalSummary && (
+            <motion.div key="debrief" initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}
+              style={{ width: "100%", maxWidth: 820 }}>
+              <div style={{ ...panel, padding: "40px 44px" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 32 }}>
+                  <div>
+                    <h2 style={{ fontSize: 26, fontWeight: 900, letterSpacing: "-0.02em", margin: "0 0 4px" }}>Debrief</h2>
+                    <p style={{ fontSize: 11, color: "rgba(255,255,255,0.3)", fontFamily: "monospace", margin: 0 }}>
+                      Review each answer before seeing your final score
+                    </p>
+                  </div>
+                  <button onClick={() => setStage("dashboard")}
+                    style={{ padding: "10px 20px", borderRadius: 10, background: "#fff", color: "#000", border: "none", fontWeight: 700, fontSize: 11, letterSpacing: "0.08em", textTransform: "uppercase", cursor: "pointer" }}>
+                    Full Dashboard →
+                  </button>
+                </div>
+
+                <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+                  {finalSummary.history.map((item, idx) => {
+                    const s = item?.evaluation?.score ?? 0;
+                    const col = s >= 7 ? "rgba(100,255,150,0.8)" : s >= 5 ? "rgba(255,200,80,0.8)" : "rgba(255,100,100,0.8)";
+                    return (
+                      <div key={idx} style={{ background: "rgba(255,255,255,0.025)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 14, overflow: "hidden" }}>
+                        {/* Question header */}
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "14px 20px", borderBottom: "1px solid rgba(255,255,255,0.06)", background: "rgba(255,255,255,0.02)" }}>
+                          <span style={{ fontSize: 10, fontWeight: 700, color: "rgba(255,255,255,0.3)", textTransform: "uppercase", letterSpacing: "0.08em" }}>
+                            Q{idx + 1} · {item.difficulty || "Medium"}
+                          </span>
+                          <span style={{ fontFamily: "monospace", fontWeight: 900, fontSize: 16, color: col }}>{s}/10</span>
+                        </div>
+
+                        <div style={{ padding: "18px 20px", display: "flex", flexDirection: "column", gap: 14 }}>
+                          {/* Question text */}
+                          <p style={{ margin: 0, fontSize: 13, lineHeight: 1.6, color: "rgba(255,255,255,0.85)" }}>
+                            {item.question}
+                          </p>
+
+                          {/* Score bar */}
+                          <div style={{ width: "100%", height: 2, background: "rgba(255,255,255,0.06)", borderRadius: 99 }}>
+                            <div style={{ width: `${s * 10}%`, height: "100%", background: col, borderRadius: 99, transition: "width .8s ease" }} />
+                          </div>
+
+                          {/* Your answer vs ideal */}
+                          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                            <div style={{ background: "rgba(255,255,255,0.03)", borderRadius: 10, padding: "12px 14px" }}>
+                              <p style={{ fontSize: 9, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: "rgba(255,255,255,0.25)", marginBottom: 6 }}>Your Answer</p>
+                              <p style={{ fontSize: 11, color: "rgba(255,255,255,0.5)", lineHeight: 1.6, margin: 0 }}>{item.answer || "—"}</p>
+                            </div>
+                            {item?.evaluation?.ideal_answer && (
+                              <div style={{ background: "rgba(100,255,150,0.04)", border: "1px solid rgba(100,255,150,0.12)", borderRadius: 10, padding: "12px 14px" }}>
+                                <p style={{ fontSize: 9, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: "rgba(100,255,150,0.5)", marginBottom: 6 }}>Ideal Answer</p>
+                                <p style={{ fontSize: 11, color: "rgba(255,255,255,0.5)", lineHeight: 1.6, margin: 0 }}>{item.evaluation.ideal_answer}</p>
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Tip */}
+                          {item?.evaluation?.suggestions && (
+                            <p style={{ margin: 0, fontSize: 11, color: "rgba(255,200,80,0.7)", fontStyle: "italic", borderLeft: "2px solid rgba(255,200,80,0.2)", paddingLeft: 10 }}>
+                              {item.evaluation.suggestions}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                <div style={{ marginTop: 28, display: "flex", gap: 12, justifyContent: "flex-end" }}>
+                  <button onClick={() => window.location.reload()}
+                    style={{ padding: "12px 22px", borderRadius: 10, background: "rgba(255,255,255,0.06)", color: "#fff", border: "1px solid rgba(255,255,255,0.12)", fontWeight: 700, fontSize: 11, letterSpacing: "0.08em", textTransform: "uppercase", cursor: "pointer" }}>
+                    New Simulation
+                  </button>
+                  <button onClick={() => setStage("dashboard")}
+                    style={{ padding: "12px 22px", borderRadius: 10, background: "#fff", color: "#000", border: "none", fontWeight: 700, fontSize: 11, letterSpacing: "0.08em", textTransform: "uppercase", cursor: "pointer" }}>
+                    View Full Dashboard →
+                  </button>
                 </div>
               </div>
             </motion.div>
@@ -950,6 +1114,8 @@ export default function Home() {
         @keyframes bounce { from { transform: scaleY(0.5); } to { transform: scaleY(1.2); } }
         @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
         .cursor-blink { animation: blink 0.75s ease-in-out infinite; }
+        @keyframes timerPulse { 0%,100%{box-shadow:0 0 0 0 rgba(255,80,80,0)} 50%{box-shadow:0 0 0 4px rgba(255,80,80,0.35)} }
+        .timer-urgent { animation: timerPulse 0.6s ease-in-out infinite; border-color: rgba(255,80,80,0.6) !important; color: rgba(255,120,120,1) !important; }
 
         .nav-txt-btn {
           font-size: 11px; color: rgba(255,255,255,0.45);

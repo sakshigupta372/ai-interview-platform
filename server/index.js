@@ -30,9 +30,11 @@ connectDB();
 const interviewRoute = require("./routes/interview");
 const mentorRoute = require("./routes/mentor");
 const resumeRoute = require("./routes/resume");
+const coachRoute = require("./routes/coach");
 app.use("/interview", interviewRoute);
 app.use("/mentor", mentorRoute);
 app.use("/resume", resumeRoute);
+app.use("/coach", coachRoute);
 
 app.get("/", (req, res) => {
   res.send("NEXUS.AI API + MongoDB Running...");
