@@ -326,7 +326,7 @@ export default function Home() {
     ttsSpeak(text, persona, elevenLabsKey, {
       onStart: () => setIsAiSpeaking(true),
       onEnd:   () => setIsAiSpeaking(false),
-    });
+    }, language);
   };
 
   // Live meters
