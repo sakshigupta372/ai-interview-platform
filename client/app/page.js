@@ -690,29 +690,94 @@ export default function Home() {
           )}
 
           {/* ══ DASHBOARD ════════════════════════════════════════════════════ */}
-          {stage === "dashboard" && finalSummary && (
-            <motion.div key="dashboard" initial={{ opacity: 0, scale: 0.97 }} animate={{ opacity: 1, scale: 1 }}
-              style={{ width: "100%", maxWidth: 860, ...panel, padding: "48px 52px" }}>
-              <h2 style={{ fontSize: 28, fontWeight: 900, letterSpacing: "-0.02em", margin: "0 0 4px" }}>Simulation Report</h2>
-              <p style={{ fontSize: 11, color: "rgba(255,255,255,0.3)", fontFamily: "monospace", margin: "0 0 36px" }}>{company} · {interviewType}</p>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 14, marginBottom: 28 }}>
-                {[["Peak Difficulty", finalSummary.currentDifficulty], ["Strengths Found", finalSummary.globalStrengths.length], ["Questions", finalSummary.history.length]].map(([l, v]) => (
-                  <div key={l} style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 14, padding: "20px 18px", textAlign: "center" }}>
-                    <p style={{ fontSize: 10, color: "rgba(255,255,255,0.3)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 8 }}>{l}</p>
-                    <p style={{ fontSize: 26, fontWeight: 900, margin: 0 }}>{v}</p>
+          {stage === "dashboard" && finalSummary && (() => {
+            const scores = finalSummary.history.map(h => h?.evaluation?.score ?? 0);
+            const avgScore = scores.length ? (scores.reduce((a, b) => a + b, 0) / scores.length).toFixed(1) : "—";
+            return (
+              <motion.div key="dashboard" initial={{ opacity: 0, scale: 0.97 }} animate={{ opacity: 1, scale: 1 }}
+                style={{ width: "100%", maxWidth: 900, ...panel, padding: "48px 52px" }}>
+                <h2 style={{ fontSize: 28, fontWeight: 900, letterSpacing: "-0.02em", margin: "0 0 4px" }}>Simulation Report</h2>
+                <p style={{ fontSize: 11, color: "rgba(255,255,255,0.3)", fontFamily: "monospace", margin: "0 0 36px" }}>
+                  {company} · {interviewType} · {role}
+                </p>
+
+                {/* Stats row */}
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 14, marginBottom: 32 }}>
+                  {[
+                    ["Avg Score", `${avgScore}/10`],
+                    ["Peak Difficulty", finalSummary.currentDifficulty],
+                    ["Strengths", finalSummary.globalStrengths.length],
+                    ["Questions", finalSummary.history.length],
+                  ].map(([l, v]) => (
+                    <div key={l} style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 14, padding: "20px 18px", textAlign: "center" }}>
+                      <p style={{ fontSize: 10, color: "rgba(255,255,255,0.3)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 8 }}>{l}</p>
+                      <p style={{ fontSize: 22, fontWeight: 900, margin: 0 }}>{v}</p>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Per-question breakdown */}
+                <div style={{ marginBottom: 28 }}>
+                  <p style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", color: "rgba(255,255,255,0.25)", marginBottom: 14 }}>Question Breakdown</p>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                    {finalSummary.history.map((item, idx) => {
+                      const s = item?.evaluation?.score ?? 0;
+                      const barColor = s >= 7 ? "rgba(100,255,150,0.7)" : s >= 5 ? "rgba(255,200,80,0.7)" : "rgba(255,100,100,0.7)";
+                      return (
+                        <div key={idx} style={{ background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: 12, padding: "14px 18px" }}>
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                            <span style={{ fontSize: 11, color: "rgba(255,255,255,0.55)", maxWidth: "80%", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                              Q{idx + 1} · <span style={{ color: "rgba(255,255,255,0.35)", fontStyle: "italic" }}>{item.difficulty || "Medium"}</span> — {item.question}
+                            </span>
+                            <span style={{ fontFamily: "monospace", fontWeight: 900, fontSize: 14, color: barColor, whiteSpace: "nowrap", marginLeft: 12 }}>{s}/10</span>
+                          </div>
+                          <div style={{ width: "100%", height: 2, background: "rgba(255,255,255,0.06)", borderRadius: 99 }}>
+                            <div style={{ width: `${s * 10}%`, height: "100%", background: barColor, borderRadius: 99, transition: "width .6s" }} />
+                          </div>
+                          {item?.evaluation?.suggestions && (
+                            <p style={{ margin: "8px 0 0", fontSize: 11, color: "rgba(255,255,255,0.3)", fontStyle: "italic" }}>
+                              💡 {item.evaluation.suggestions}
+                            </p>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
-                ))}
-              </div>
-              <div style={{ display: "flex", gap: 12, marginTop: 4 }}>
-                <button onClick={downloadReport} style={{ flex: 1, padding: 14, borderRadius: 12, background: "rgba(255,255,255,0.08)", color: "#fff", fontWeight: 700, fontSize: 12, letterSpacing: "0.1em", textTransform: "uppercase", border: "1px solid rgba(255,255,255,0.15)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
-                  <Download size={14} /> Download PDF Report
-                </button>
-                <button onClick={() => window.location.reload()} style={{ flex: 1, padding: 14, borderRadius: 12, background: "#fff", color: "#000", fontWeight: 700, fontSize: 12, letterSpacing: "0.1em", textTransform: "uppercase", border: "none", cursor: "pointer" }}>
-                  New Simulation
-                </button>
-              </div>
-            </motion.div>
-          )}
+                </div>
+
+                {/* Strengths & Weaknesses */}
+                {(finalSummary.globalStrengths.length > 0 || finalSummary.globalWeaknesses.length > 0) && (
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 28 }}>
+                    <div style={{ background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: 12, padding: "18px 20px" }}>
+                      <p style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", color: "rgba(100,255,150,0.5)", marginBottom: 10 }}>Strengths</p>
+                      {finalSummary.globalStrengths.length === 0
+                        ? <p style={{ fontSize: 11, color: "rgba(255,255,255,0.2)", fontStyle: "italic" }}>None detected</p>
+                        : finalSummary.globalStrengths.map((s, i) => <p key={i} style={{ fontSize: 12, color: "rgba(255,255,255,0.55)", margin: "0 0 4px" }}>+ {s}</p>)}
+                    </div>
+                    <div style={{ background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: 12, padding: "18px 20px" }}>
+                      <p style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", color: "rgba(255,200,80,0.5)", marginBottom: 10 }}>Areas to Improve</p>
+                      {finalSummary.globalWeaknesses.length === 0
+                        ? <p style={{ fontSize: 11, color: "rgba(255,255,255,0.2)", fontStyle: "italic" }}>None detected</p>
+                        : finalSummary.globalWeaknesses.map((w, i) => <p key={i} style={{ fontSize: 12, color: "rgba(255,255,255,0.55)", margin: "0 0 4px" }}>— {w}</p>)}
+                    </div>
+                  </div>
+                )}
+
+                {/* Actions */}
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
+                  <button onClick={downloadReport} style={{ padding: 14, borderRadius: 12, background: "rgba(255,255,255,0.06)", color: "#fff", fontWeight: 700, fontSize: 11, letterSpacing: "0.08em", textTransform: "uppercase", border: "1px solid rgba(255,255,255,0.12)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
+                    <Download size={13} /> PDF Report
+                  </button>
+                  <button onClick={() => window.location.href = "/profile"} style={{ padding: 14, borderRadius: 12, background: "rgba(255,255,255,0.06)", color: "#fff", fontWeight: 700, fontSize: 11, letterSpacing: "0.08em", textTransform: "uppercase", border: "1px solid rgba(255,255,255,0.12)", cursor: "pointer" }}>
+                    View History →
+                  </button>
+                  <button onClick={() => window.location.reload()} style={{ padding: 14, borderRadius: 12, background: "#fff", color: "#000", fontWeight: 700, fontSize: 11, letterSpacing: "0.08em", textTransform: "uppercase", border: "none", cursor: "pointer" }}>
+                    New Simulation
+                  </button>
+                </div>
+              </motion.div>
+            );
+          })()}
 
         </AnimatePresence>
       </main>
