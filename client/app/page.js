@@ -16,7 +16,7 @@ import { getCompany } from "@/lib/companies";
 import { useAuth, useUser, SignInButton, UserButton } from "@clerk/nextjs";
 import dynamic from "next/dynamic";
 
-const CodeEditor = dynamic(() => import("../../components/CodeEditor"), { ssr: false });
+const CodeEditor = dynamic(() => import("@/components/CodeEditor"), { ssr: false });
 
 // ─── ShapeGrid (canvas) ───────────────────────────────────────────────────────
 function ShapeGrid() {
