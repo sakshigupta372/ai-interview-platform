@@ -1,50 +1,52 @@
-const { getAI, extractResponseText } = require("./llm");
+const { getAI, extractResponseText, getLangInstruction } = require("./llm");
 
 // Helper: sleep for ms milliseconds
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-async function evaluateAnswer(question, answer, currentDifficulty = "Medium", userApiKey = null, isCodingRound = false) {
+async function evaluateAnswer(question, answer, currentDifficulty = "Medium", userApiKey = null, isCodingRound = false, language = "English") {
+  const langLine = getLangInstruction(language);
+
   const prompt = isCodingRound ? `
-You are an expert coding interviewer evaluating a candidate's solution.
+You are a senior engineer doing a code review on a candidate's solution.${langLine}
 
 Problem: ${question}
-Candidate's Code:
+Their code:
 ${answer}
 
-Return ONLY a valid JSON object matching the schema exactly. No markdown blocks, no extra text.
+Be direct and specific — like a colleague reviewing a PR, not a professor grading homework.
+
+Return ONLY valid JSON. No markdown, no extra text.
 
 {
-  "score": <number between 0 and 10>,
-  "correctness": "<does the solution correctly solve the problem?>",
-  "clarity": "<code readability, naming conventions, structure>",
-  "confidence": "<inference from the approach and style used>",
-  "suggestions": "<specific, actionable code improvements>",
-  "ideal_answer": "<a clean optimal solution with brief explanation>",
-  "detected_strengths": ["<string>", "<string>"],
-  "detected_weaknesses": ["<string>", "<string>"],
+  "score": <0-10>,
+  "correctness": "<one sentence: does it work? any bugs or edge cases missed?>",
+  "clarity": "<one sentence on readability — naming, structure, comments>",
+  "confidence": "<one sentence inference from their approach and code style>",
+  "suggestions": "<the single most useful thing they should fix or improve, phrased like a code review comment>",
+  "ideal_answer": "<a clean, optimal solution with a one-line explanation of the key insight>",
+  "detected_strengths": ["<specific thing they did well>"],
+  "detected_weaknesses": ["<specific gap or mistake>"],
   "suggested_next_difficulty": "<'Easy' | 'Medium' | 'Hard'>",
-  "time_complexity": "<Big-O time complexity of candidate's solution>",
-  "space_complexity": "<Big-O space complexity of candidate's solution>"
+  "time_complexity": "<Big-O of their solution>",
+  "space_complexity": "<Big-O of their solution>"
 }
 ` : `
-You are an expert ${currentDifficulty}-level interviewer.
-
-Evaluate the candidate's answer.
+You are evaluating a candidate's answer in a ${currentDifficulty}-level interview. Be honest and direct — like a senior engineer giving real feedback, not a teacher being nice.${langLine}
 
 Question: ${question}
-Answer: ${answer}
+Their answer: ${answer}
 
-Return ONLY a valid JSON object matching the schema exactly. No markdown blocks, no extra text.
+Return ONLY valid JSON. No markdown, no extra text.
 
 {
-  "score": <number between 0 and 10>,
-  "correctness": "<conversational feedback on whether the answer was correct, like a human reviewer would say>",
-  "clarity": "<casual note on how clearly they communicated>",
-  "confidence": "<observation on their confidence level from how they wrote>",
-  "suggestions": "<friendly, specific tip on what they could improve — like a mentor talking>",
-  "ideal_answer": "<a concise, clear model answer a strong candidate would give>",
-  "detected_strengths": ["<string>", "<string>"],
-  "detected_weaknesses": ["<string>", "<string>"],
+  "score": <0-10, be calibrated — 7 means genuinely good, not just adequate>,
+  "correctness": "<one casual sentence on whether they got it right — talk like a colleague, not a textbook>",
+  "clarity": "<one sentence on how clearly they explained it>",
+  "confidence": "<one sentence reading their confidence from tone and structure>",
+  "suggestions": "<the ONE thing that would most improve their answer — be specific, not generic>",
+  "ideal_answer": "<a concise model answer that a strong candidate would give — conversational, not textbook>",
+  "detected_strengths": ["<specific thing they did well>", "<another if applicable>"],
+  "detected_weaknesses": ["<specific gap>", "<another if applicable>"],
   "suggested_next_difficulty": "<'Easy' | 'Medium' | 'Hard'>"
 }
 `;

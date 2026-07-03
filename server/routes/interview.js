@@ -22,7 +22,7 @@ function sseWrite(res, data) {
 
 // 1. START — streaming version (creates session + streams opening question)
 router.post("/stream-start", async (req, res) => {
-  const { role, clerkId, userApiKey, resumeContext, isCodingRound, candidateName, drillFocus } = req.body;
+  const { role, clerkId, userApiKey, resumeContext, isCodingRound, candidateName, drillFocus, language } = req.body;
   if (!role) return res.status(400).json({ error: "Role is required" });
   if (!hasUsableApiKey(userApiKey)) return res.status(400).json({ error: "Gemini API key required." });
 
@@ -33,7 +33,7 @@ router.post("/stream-start", async (req, res) => {
     sseWrite(res, { type: "session", sessionId: session.sessionId });
 
     let fullQuestion = "";
-    const stream = streamQuestionChunks(role, userApiKey, resumeContext || null, !!isCodingRound, candidateName || null, drillFocus || null);
+    const stream = streamQuestionChunks(role, userApiKey, resumeContext || null, !!isCodingRound, candidateName || null, drillFocus || null, language || "English");
     for await (const chunk of stream) {
       fullQuestion += chunk;
       sseWrite(res, { type: "chunk", text: chunk });
@@ -53,7 +53,7 @@ router.post("/stream-start", async (req, res) => {
 // 2a. EVALUATE — scores the answer and saves to DB, returns evaluation + isComplete
 router.post("/evaluate", async (req, res) => {
   try {
-    const { sessionId, answer, userApiKey, isCodingRound } = req.body;
+    const { sessionId, answer, userApiKey, isCodingRound, language } = req.body;
     if (!sessionId || !answer) return res.status(400).json({ error: "sessionId and answer are required" });
 
     const session = await sessionService.getSession(sessionId);
@@ -63,7 +63,7 @@ router.post("/evaluate", async (req, res) => {
     const questionTheyAreAnswering = session.currentQuestion;
     const currentDifficulty = session.currentDifficulty || "Medium";
 
-    const evaluation = await evaluateAnswer(questionTheyAreAnswering, answer, currentDifficulty, userApiKey, !!isCodingRound);
+    const evaluation = await evaluateAnswer(questionTheyAreAnswering, answer, currentDifficulty, userApiKey, !!isCodingRound, language || "English");
 
     await sessionService.updateSessionData(
       sessionId,
@@ -91,7 +91,7 @@ router.post("/evaluate", async (req, res) => {
 
 // 2b. STREAM-NEXT — streams the follow-up question after evaluate
 router.post("/stream-next", async (req, res) => {
-  const { sessionId, answer, userApiKey, resumeContext, isCodingRound, candidateName, evaluationScore, nextDifficulty } = req.body;
+  const { sessionId, answer, userApiKey, resumeContext, isCodingRound, candidateName, evaluationScore, nextDifficulty, language } = req.body;
   if (!sessionId) return res.status(400).json({ error: "sessionId required" });
 
   sseSetup(res);
@@ -110,7 +110,8 @@ router.post("/stream-next", async (req, res) => {
       userApiKey,
       !!isCodingRound,
       resumeContext || null,
-      candidateName || null
+      candidateName || null,
+      language || "English"
     );
 
     for await (const chunk of stream) {

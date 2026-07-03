@@ -101,12 +101,20 @@ Rules:
   }
 }
 
-function buildQuestionPrompt(role, resumeContext, isCodingRound, candidateName, drillFocus = null) {
+function getLangInstruction(language) {
+  if (language === "Hindi") return "\n\nLANGUAGE: Respond entirely in Hindi (Devanagari script). Technical terms (like API, recursion, SQL) can stay in English but everything else must be Hindi.";
+  if (language === "Hinglish") return "\n\nLANGUAGE: Respond in Hinglish — a natural mix of Hindi and English the way Indian engineers actually talk in interviews. Example: 'Okay so tell me, tumhara last project mein kya kiya tha? Koi specific challenge tha jo interesting laga?'";
+  return ""; // English — default
+}
+
+function buildQuestionPrompt(role, resumeContext, isCodingRound, candidateName, drillFocus = null, language = "English") {
+  const langLine = getLangInstruction(language);
+
   if (isCodingRound) {
     const drillLine = drillFocus
       ? `\nFocus: This is a targeted drill. Design the problem to specifically test: "${drillFocus}".`
       : "";
-    return `You are a technical interviewer conducting a coding interview for a ${role} position.${drillLine}
+    return `You are a technical interviewer conducting a coding interview for a ${role} position.${drillLine}${langLine}
 Generate ONE coding problem. Include:
 1. Clear problem statement
 2. Input/Output format
@@ -115,31 +123,32 @@ Generate ONE coding problem. Include:
 
 Output ONLY the problem. No extra commentary.`;
   }
+
   const firstName = getFirstName(resumeContext, candidateName);
   const nameLine = firstName
-    ? `\n- Name: ${firstName} (use this first name in your greeting — e.g. "Hi ${firstName}," — NEVER use placeholders like [Candidate Name])`
-    : `\n- Name: not provided (do NOT use [Candidate Name] or any bracket placeholders — say "thanks for joining us" without a name)`;
+    ? `\n- Name: ${firstName} (use their first name naturally in your greeting — NEVER use placeholders like [Candidate Name])`
+    : `\n- Name: not provided (do NOT use [Candidate Name] or any bracket placeholder — just skip the name)`;
   const resumeSection = resumeContext
-    ? `\nCandidate Profile:${nameLine}\n- Recent Role: ${resumeContext.recent_role} at ${resumeContext.recent_company}\n- Experience: ${resumeContext.years_experience} years\n- Top Skills: ${(resumeContext.top_skills || []).join(", ")}\n- Background: ${resumeContext.summary}\n\nTailor the question to their specific background and the target role.`
-    : `\nCandidate Profile:${nameLine}`;
+    ? `\nCandidate:${nameLine}\n- Recent Role: ${resumeContext.recent_role} at ${resumeContext.recent_company}\n- Experience: ${resumeContext.years_experience} years\n- Skills: ${(resumeContext.top_skills || []).join(", ")}\n- Background: ${resumeContext.summary}\n\nTailor your opening question to their specific background.`
+    : `\nCandidate:${nameLine}`;
   const drillLine = drillFocus
-    ? `\n\nDRILL MODE: This is a targeted practice session. Open with a question that directly tests the candidate's weakness in: "${drillFocus}". Be natural — don't mention it's a drill.`
+    ? `\n\nDRILL: Open with a question that directly probes the candidate's weakness in: "${drillFocus}". Be natural — don't mention it's a drill.`
     : "";
-  return `You are a real human interviewer having a casual but professional conversation with a candidate for a ${role} role.${resumeSection}${drillLine}
 
-Start the interview naturally — like you would in a real Zoom call or in-person interview. Sound warm, human, and direct.
+  return `You are a real human interviewer on a Zoom call for a ${role} role.${resumeSection}${drillLine}${langLine}
 
-Rules:
-- ONE concept, easy-to-medium difficulty
-- 1-2 sentences max
-- Sound like a person, not a textbook
-- Do NOT say "As an AI" or "As your interviewer" — just talk naturally
-- NEVER output bracket placeholders like [Candidate Name] — use the real name or skip the name
-- Output ONLY what the interviewer says (the question itself)`;
+Open the interview exactly like a real person would — casual, direct, no corporate-speak.
+
+HARD RULES — breaking any of these is failure:
+- NEVER say: "Great question!", "Excellent!", "Certainly!", "Of course!", "Absolutely!", "That's interesting!", "Sure thing!", "As an interviewer", "As an AI"
+- Do NOT use exclamation marks for praise
+- Do NOT introduce yourself formally — just start
+- ONE question, max 2 sentences
+- Output ONLY the question — nothing else`;
 }
 
-async function* streamQuestionChunks(role, userApiKey, resumeContext = null, isCodingRound = false, candidateName = null, drillFocus = null) {
-  const prompt = buildQuestionPrompt(role, resumeContext, isCodingRound, candidateName, drillFocus);
+async function* streamQuestionChunks(role, userApiKey, resumeContext = null, isCodingRound = false, candidateName = null, drillFocus = null, language = "English") {
+  const prompt = buildQuestionPrompt(role, resumeContext, isCodingRound, candidateName, drillFocus, language);
   const firstName = getFirstName(resumeContext, candidateName);
   const client = getAI(userApiKey);
   const stream = await client.models.generateContentStream({
@@ -156,6 +165,7 @@ module.exports = {
   generateQuestion,
   streamQuestionChunks,
   buildQuestionPrompt,
+  getLangInstruction,
   ai,
   getAI,
   getFirstName,

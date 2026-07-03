@@ -261,6 +261,7 @@ export default function Home() {
   const [liveConfidence, setLiveConfidence] = useState(0);
   const [timeLeft, setTimeLeft] = useState(120);
 
+  const [language, setLanguage] = useState("English"); // "English" | "Hindi" | "Hinglish"
   const [drillMode, setDrillMode] = useState(null); // { weakness, drillQuestion }
 
   const [elevenLabsKey, setElevenLabsKey] = useState("");
@@ -468,7 +469,7 @@ export default function Home() {
     try {
       await readSSEStream(
         `${apiBase}/interview/stream-start`,
-        { role: ctx, clerkId: userId, userApiKey, resumeContext: resumeContext || undefined, isCodingRound, candidateName: getCandidateName() || undefined, drillFocus: drillMode?.weakness || undefined },
+        { role: ctx, clerkId: userId, userApiKey, resumeContext: resumeContext || undefined, isCodingRound, candidateName: getCandidateName() || undefined, drillFocus: drillMode?.weakness || undefined, language },
         (chunk) => { accum += chunk; setStreamingText(accum); },
         (sid) => { setSessionId(sid); setCurrentDifficulty("Medium"); },
         (fullQuestion) => {
@@ -510,7 +511,7 @@ export default function Home() {
       // Step 1: fast evaluation (JSON)
       const res = await axios.post(
         `${apiBase}/interview/evaluate`,
-        { sessionId, answer: userAns, userApiKey, isCodingRound },
+        { sessionId, answer: userAns, userApiKey, isCodingRound, language },
         { timeout: 90000 }
       );
       const { evaluation, isComplete, sessionSummary, nextDifficulty } = res.data;
@@ -533,7 +534,7 @@ export default function Home() {
       let accum = "";
       await readSSEStream(
         `${apiBase}/interview/stream-next`,
-        { sessionId, answer: userAns, userApiKey, resumeContext: resumeContext || undefined, isCodingRound, candidateName: getCandidateName() || undefined, evaluationScore: evaluation.score, nextDifficulty: nextDifficulty || currentDifficulty },
+        { sessionId, answer: userAns, userApiKey, resumeContext: resumeContext || undefined, isCodingRound, candidateName: getCandidateName() || undefined, evaluationScore: evaluation.score, nextDifficulty: nextDifficulty || currentDifficulty, language },
         (chunk) => { accum += chunk; setStreamingText(accum); },
         null,
         (fullQuestion) => {
@@ -753,11 +754,12 @@ export default function Home() {
                   />
                 </div>
 
-                {/* Tone + Timer */}
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 16 }}>
+                {/* Tone + Timer + Language */}
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12, marginBottom: 16 }}>
                   {[
                     { lbl: "Interviewer style", val: persona, set: setPersona, opts: [["Harsh Tech Lead","Strict & direct"], ["Friendly Microsoft HR","Warm & structured"], ["Chaotic Startup Founder","Fast & casual"]] },
                     { lbl: "Pace", val: timerMode, set: setTimerMode, opts: [["Practice Mode","No timer"], ["Pressure Mode","2 min / Q"], ["Rapid Fire","30 sec / Q"]] },
+                    { lbl: "Language", val: language, set: setLanguage, opts: [["English","English only"], ["Hinglish","Hindi + English mix"], ["Hindi","Full Hindi"]] },
                   ].map(({ lbl, val, set, opts }) => (
                     <div key={lbl}>
                       <span style={label}>{lbl}</span>
