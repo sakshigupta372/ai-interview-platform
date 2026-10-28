@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import axios from "axios";
 import { useAuth, UserButton } from "@clerk/nextjs";
 import { Rocket, Target, ArrowLeft, BarChart3, BrainCircuit, Activity, Database, ChevronDown, ChevronUp, MessageSquare, TrendingUp, Trash2 } from "lucide-react";
@@ -210,7 +211,7 @@ export default function Profile() {
   if (!userId) {
     return (
       <div style={{ minHeight: "100vh", background: "#050505", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontFamily: "Inter, sans-serif" }}>
-        <p>Unauthorized. <a href="/" style={{ color: "rgba(255,255,255,0.5)" }}>Go back</a></p>
+        <p>Unauthorized. <Link href="/" style={{ color: "rgba(255,255,255,0.5)" }}>Go back</Link></p>
       </div>
     );
   }

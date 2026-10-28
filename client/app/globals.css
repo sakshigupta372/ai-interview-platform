@@ -13,7 +13,8 @@
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
-html, body { background: #000; color: var(--text); font-family: 'Inter', sans-serif; }
+html, body { background: #000; color: var(--text); font-family: var(--font-inter), 'Inter', sans-serif; }
+html:has(.nx), body:has(.nx) { background: #FBFAF7; color: #0E1A3A; }
 
 /* Glass surface */
 .glass {
