@@ -45,8 +45,9 @@ export default function OnboardingModal() {
         <motion.div
           initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
           style={{
-            position: "fixed", inset: 0, background: "rgba(0,0,0,0.8)",
+            position: "fixed", inset: 0, background: "rgba(14,26,58,0.45)",
             zIndex: 8000, display: "flex", alignItems: "center", justifyContent: "center", padding: 24,
+            backdropFilter: "blur(8px)",
           }}
           onClick={e => { if (e.target === e.currentTarget) dismiss(); }}>
 
@@ -54,13 +55,14 @@ export default function OnboardingModal() {
             initial={{ scale: 0.9, y: 24 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.9, opacity: 0 }}
             transition={{ type: "spring", stiffness: 360, damping: 30 }}
             style={{
-              background: "#080808", border: "1px solid rgba(255,255,255,0.1)",
+              background: "#FFFFFF", border: "1px solid #E3E5F1",
               borderRadius: 24, padding: "44px 44px 36px", maxWidth: 440, width: "100%",
-              position: "relative", fontFamily: "Inter, sans-serif",
+              position: "relative", fontFamily: "var(--font-dm-sans), 'DM Sans', sans-serif",
+              boxShadow: "0 30px 60px -30px rgba(14,26,58,0.35)", color: "#0E1A3A",
             }}>
 
             {/* Close */}
-            <button onClick={dismiss} style={{ position: "absolute", top: 18, right: 18, background: "none", border: "none", cursor: "pointer", color: "rgba(255,255,255,0.25)", padding: 4 }}>
+            <button onClick={dismiss} style={{ position: "absolute", top: 18, right: 18, background: "none", border: "none", cursor: "pointer", color: "#9AA0B8", padding: 4 }}>
               <X size={16} />
             </button>
 
@@ -68,7 +70,7 @@ export default function OnboardingModal() {
             <div style={{ display: "flex", gap: 6, marginBottom: 36 }}>
               {STEPS.map((_, i) => (
                 <motion.div key={i}
-                  animate={{ background: i <= step ? "#fff" : "rgba(255,255,255,0.12)" }}
+                  animate={{ background: i <= step ? "#4A3DF0" : "#E6E8F3" }}
                   transition={{ duration: 0.3 }}
                   style={{ height: 2, flex: 1, borderRadius: 99 }} />
               ))}
@@ -80,15 +82,15 @@ export default function OnboardingModal() {
                 initial={{ opacity: 0, x: 18 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -18 }}
                 transition={{ duration: 0.22 }}>
                 <div style={{ fontSize: 44, marginBottom: 20, lineHeight: 1 }}>{STEPS[step].emoji}</div>
-                <h2 style={{ fontSize: 22, fontWeight: 900, color: "#fff", margin: "0 0 12px", letterSpacing: "-0.02em" }}>
+                <h2 style={{ fontSize: 22, fontWeight: 800, color: "#0E1A3A", margin: "0 0 12px", letterSpacing: "-0.02em", fontFamily: "var(--font-manrope), Manrope, sans-serif" }}>
                   {STEPS[step].title}
                 </h2>
-                <p style={{ fontSize: 14, color: "rgba(255,255,255,0.45)", lineHeight: 1.65, margin: 0 }}>
+                <p style={{ fontSize: 14, color: "#596079", lineHeight: 1.65, margin: 0 }}>
                   {STEPS[step].body}
                 </p>
                 {STEPS[step].cta && (
                   <a href={STEPS[step].cta.href} target="_blank" rel="noreferrer"
-                    style={{ display: "inline-block", marginTop: 14, fontSize: 12, color: "rgba(255,255,255,0.65)", textDecoration: "underline" }}>
+                    style={{ display: "inline-block", marginTop: 14, fontSize: 12, color: "#4A3DF0", textDecoration: "underline" }}>
                     {STEPS[step].cta.label}
                   </a>
                 )}
@@ -98,19 +100,19 @@ export default function OnboardingModal() {
             {/* Footer */}
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 40 }}>
               <button onClick={dismiss}
-                style={{ fontSize: 11, color: "rgba(255,255,255,0.22)", background: "none", border: "none", cursor: "pointer", letterSpacing: "0.04em" }}>
+                style={{ fontSize: 11, color: "#9AA0B8", background: "none", border: "none", cursor: "pointer", letterSpacing: "0.04em" }}>
                 Skip
               </button>
               <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
                 {step > 0 && (
                   <button onClick={() => setStep(p => p - 1)}
-                    style={{ padding: "10px 18px", borderRadius: 10, background: "rgba(255,255,255,0.07)", color: "#fff", border: "1px solid rgba(255,255,255,0.1)", fontWeight: 600, fontSize: 12, cursor: "pointer" }}>
+                    style={{ padding: "10px 18px", borderRadius: 10, background: "transparent", color: "#0E1A3A", border: "1px solid #D7D9E6", fontWeight: 600, fontSize: 12, cursor: "pointer" }}>
                     ← Back
                   </button>
                 )}
                 <button
                   onClick={() => step < STEPS.length - 1 ? setStep(p => p + 1) : dismiss()}
-                  style={{ padding: "10px 22px", borderRadius: 10, background: "#fff", color: "#000", border: "none", fontWeight: 700, fontSize: 12, cursor: "pointer" }}>
+                  style={{ padding: "10px 22px", borderRadius: 10, background: "#4A3DF0", color: "#fff", border: "none", fontWeight: 700, fontSize: 12, cursor: "pointer", boxShadow: "0 8px 20px -10px rgba(74,61,240,0.7)" }}>
                   {step < STEPS.length - 1 ? "Next →" : "Let's go →"}
                 </button>
               </div>

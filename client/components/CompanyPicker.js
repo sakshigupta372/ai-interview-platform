@@ -108,7 +108,7 @@ export default function CompanyPicker({ value, onChange }) {
           }}>
             {results.length === 0 ? (
               <div style={{ padding: "10px 14px", fontSize: 12, color: "rgba(255,255,255,0.3)" }}>
-                No match — using "{query}" as custom company
+                No match — using &quot;{query}&quot; as custom company
                 <button onClick={() => { onChange(query); setQuery(""); setOpen(false); }}
                   style={{ marginLeft: 10, fontSize: 11, color: "rgba(255,255,255,0.55)", background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 6, padding: "3px 10px", cursor: "pointer" }}>
                   Use it →

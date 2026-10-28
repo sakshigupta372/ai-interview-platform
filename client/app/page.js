@@ -4,17 +4,18 @@ import { useState, useEffect, useRef } from "react";
 import axios from "axios";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  Loader2, Zap, ShieldAlert,
-  Mic, MicOff, Rocket, Lightbulb, Target, Brain, Activity,
-  Download, Upload, CheckCircle, Code2, Key, X,
+  Zap,
+  Mic, MicOff, Lightbulb, Target, Brain, Activity,
+  Download, Key, X,
 } from "lucide-react";
 import { getApiBase } from "@/lib/api";
 import { APP_NAME, loadGeminiKey, saveGeminiKey } from "@/lib/brand";
 import { toast } from "@/lib/toast";
 import { speak as ttsSpeak, cancelSpeech, loadElevenLabsKey, saveElevenLabsKey } from "@/lib/tts";
 import { DeepgramSTT, loadDeepgramKey, saveDeepgramKey } from "@/lib/deepgramSTT";
-import CompanyPicker from "@/components/CompanyPicker";
 import InterviewerAvatar from "@/components/InterviewerAvatar";
+import LandingPage from "@/components/LandingPage";
+import SetupEngine from "@/components/SetupEngine";
 import { getCompany } from "@/lib/companies";
 import { useAuth, useUser, SignInButton, UserButton } from "@clerk/nextjs";
 import dynamic from "next/dynamic";
@@ -144,49 +145,6 @@ function ChatMessage({ msg, isLast, isTyping }) {
   );
 }
 
-// ─── Landing hero ─────────────────────────────────────────────────────────────
-const FEATURES = [
-  { icon: Brain, title: "Adaptive difficulty", desc: "Questions get harder or easier in real time based on how you answer." },
-  { icon: Target, title: "Company-tailored", desc: "Practice the real interview style of 60+ companies, or go role-agnostic." },
-  { icon: Mic, title: "Voice or text", desc: "Speak naturally with live transcription, or type — your call." },
-  { icon: Zap, title: "Instant feedback", desc: "Get a scored debrief with an ideal-answer breakdown after every session." },
-];
-
-function LandingHero({ onStart }) {
-  return (
-    <motion.div key="landing-hero"
-      initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: -20 }} transition={{ duration: 0.45 }}
-      style={{ width: "100%", maxWidth: 780, textAlign: "center" }}
-    >
-      <p style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.16em", textTransform: "uppercase", color: "rgba(255,255,255,0.3)", margin: "0 0 18px" }}>
-        AI-powered interview simulation
-      </p>
-      <h1 style={{ fontSize: "clamp(34px, 6vw, 58px)", fontWeight: 900, letterSpacing: "-0.03em", lineHeight: 1.08, margin: "0 0 20px" }}>
-        Interview practice that<br />actually adapts to you.
-      </h1>
-      <p style={{ fontSize: 15, color: "rgba(255,255,255,0.4)", lineHeight: 1.7, maxWidth: 520, margin: "0 auto 40px" }}>
-        A live AI interviewer that tunes question difficulty to your answers, matches a real company's style, and gives you a scored, ideal-answer debrief the moment you finish.
-      </p>
-
-      <button onClick={onStart}
-        style={{ padding: "17px 40px", borderRadius: 14, border: "none", cursor: "pointer", background: "#fff", color: "#000", fontWeight: 700, fontSize: 13, letterSpacing: "0.08em", textTransform: "uppercase", display: "inline-flex", alignItems: "center", gap: 10, marginBottom: 56 }}>
-        <Rocket size={16} /> Start Interview
-      </button>
-
-      <div className="feature-grid">
-        {FEATURES.map(({ icon: Icon, title, desc }) => (
-          <div key={title} style={{ ...panel, padding: "22px 20px", textAlign: "left" }}>
-            <Icon size={18} color="rgba(255,255,255,0.6)" style={{ marginBottom: 12 }} />
-            <p style={{ fontSize: 13, fontWeight: 700, margin: "0 0 6px" }}>{title}</p>
-            <p style={{ fontSize: 12, color: "rgba(255,255,255,0.35)", lineHeight: 1.6, margin: 0 }}>{desc}</p>
-          </div>
-        ))}
-      </div>
-    </motion.div>
-  );
-}
-
 // ─── SSE streaming helper ─────────────────────────────────────────────────────
 async function readSSEStream(url, body, onChunk, onSession, onDone, onError) {
   let response;
@@ -233,7 +191,6 @@ export default function Home() {
   const { user } = useUser();
 
   const [stage, setStage] = useState("landing");
-  const [showConfig, setShowConfig] = useState(false);
   const [apiKeyInput, setApiKeyInput] = useState("");
   const [apiKeyError, setApiKeyError] = useState("");
   const [showKeyModal, setShowKeyModal] = useState(false);
@@ -246,9 +203,7 @@ export default function Home() {
 
   const [sessionId, setSessionId] = useState("");
   const [userApiKey, setUserApiKey] = useState("");
-  const [resumeFile, setResumeFile] = useState(null);
   const [resumeContext, setResumeContext] = useState(null);
-  const [isParsingResume, setIsParsingResume] = useState(false);
 
   const getCandidateName = () =>
     resumeContext?.name ||
@@ -258,6 +213,11 @@ export default function Home() {
 
   const [codeLanguage, setCodeLanguage] = useState("javascript");
 
+  // Declared before the init effect below so the effect reads already-initialized setters.
+  const [drillMode, setDrillMode] = useState(null); // { weakness, drillQuestion }
+  const [elevenLabsKey, setElevenLabsKey] = useState("");
+  const [deepgramKey, setDeepgramKey] = useState("");
+
   // After Clerk loads and user is signed in, check if we already have their key in sessionStorage.
   // If not, redirect them to the API Key entry screen.
   useEffect(() => {
@@ -265,10 +225,13 @@ export default function Home() {
     if (userId) {
       const saved = loadGeminiKey();
       if (saved) setUserApiKey(saved);
-      const el = loadElevenLabsKey(); if (el) { setElevenLabsKey(el); setElInput(el); }
-      const dg = loadDeepgramKey();   if (dg) { setDeepgramKey(dg);   setDgInput(dg); }
+      const el = loadElevenLabsKey(); if (el) setElevenLabsKey(el);
+      const dg = loadDeepgramKey();   if (dg) setDeepgramKey(dg);
       const drillRaw = sessionStorage.getItem("nexus_drill_context");
-      if (drillRaw) { try { setDrillMode(JSON.parse(drillRaw)); } catch {} sessionStorage.removeItem("nexus_drill_context"); }
+      if (drillRaw) {
+        try { setDrillMode(JSON.parse(drillRaw)); setStage("setup"); } catch {}
+        sessionStorage.removeItem("nexus_drill_context");
+      }
     }
   }, [isLoaded, userId]);
 
@@ -302,13 +265,6 @@ export default function Home() {
   const [timeLeft, setTimeLeft] = useState(120);
 
   const [language, setLanguage] = useState("English"); // "English" | "Hindi" | "Hinglish"
-  const [drillMode, setDrillMode] = useState(null); // { weakness, drillQuestion }
-
-  const [elevenLabsKey, setElevenLabsKey] = useState("");
-  const [deepgramKey, setDeepgramKey] = useState("");
-  const [elInput, setElInput] = useState("");
-  const [dgInput, setDgInput] = useState("");
-  const [showVoiceKeys, setShowVoiceKeys] = useState(false);
 
   const recognitionRef = useRef(null);
   const synthRef = useRef(null);
@@ -399,11 +355,16 @@ export default function Home() {
   const isCodingRound = interviewType === "Coding Round";
 
   // ─── Config modal open/close ─────────────────────────────────────────────
-  const openConfig = () => {
-    setShowConfig(true);
-    setStage(userId && !userApiKey ? "api-key" : "role-selection");
+  const openConfig = (type) => {
+    if (typeof type === "string") setInterviewType(type);
+    setStage("setup");
   };
-  const closeConfig = () => { setShowConfig(false); setStage("landing"); };
+  const closeConfig = () => {
+    setStage("landing");
+    if (typeof window !== "undefined" && window.location.hash) {
+      window.history.replaceState(null, "", window.location.pathname || "/");
+    }
+  };
 
   // ─── Change API key ──────────────────────────────────────────────────────
   const handleChangeKey = () => { setApiKeyInput(""); setApiKeyError(""); setShowKeyModal(true); };
@@ -414,24 +375,6 @@ export default function Home() {
     setShowKeyModal(false);
     setApiKeyInput("");
     setApiKeyError("");
-  };
-
-  const handleResumeUpload = async (file) => {
-    if (!file) return;
-    setResumeFile(file);
-    setIsParsingResume(true);
-    try {
-      const formData = new FormData();
-      formData.append("resume", file);
-      formData.append("userApiKey", userApiKey);
-      const res = await axios.post(`${apiBase}/resume/parse`, formData, { timeout: 60000 });
-      setResumeContext(res.data.context);
-    } catch (e) {
-      console.error("Resume parse failed:", e);
-      setResumeContext(null);
-    } finally {
-      setIsParsingResume(false);
-    }
   };
 
   const downloadReport = async () => {
@@ -531,12 +474,12 @@ export default function Home() {
             ? "Backend not configured. Set NEXT_PUBLIC_API_URL on Vercel to your Render URL, then redeploy."
             : err || "Could not reach the server. Render may be waking up (~60s on free tier). Wait a moment and try again.";
           toast.error(msg);
-          setStage("role-selection");
+          setStage("setup");
         }
       );
     } catch (err) {
       toast.error("Could not reach the server. Wait a moment and try again.");
-      setStage("role-selection");
+      setStage("setup");
     } finally {
       setIsTyping(false);
     }
@@ -606,10 +549,50 @@ export default function Home() {
   };
 
   // ─── Render ────────────────────────────────────────────────────────────────
-  return (
-    <div style={{ minHeight: "100vh", background: "#050505", color: "#fff", fontFamily: "'Inter', sans-serif", position: "relative" }}>
-      <ShapeGrid />
+  const showLanding = stage === "landing";
+  const showSetup = stage === "setup" || stage === "api-key";
 
+  return (
+    <>
+      {showLanding && (
+        <LandingPage
+          onStart={openConfig}
+          userId={userId}
+          isLoaded={isLoaded}
+          userApiKey={userApiKey}
+          onChangeKey={handleChangeKey}
+        />
+      )}
+      {showSetup && (
+        <SetupEngine
+          stage={stage}
+          onBack={closeConfig}
+          onStart={startInterview}
+          isLoaded={isLoaded}
+          userId={userId}
+          userApiKey={userApiKey}
+          setUserApiKey={setUserApiKey}
+          role={role}
+          setRole={setRole}
+          company={company}
+          setCompany={setCompany}
+          persona={persona}
+          setPersona={setPersona}
+          timerMode={timerMode}
+          setTimerMode={setTimerMode}
+          interviewType={interviewType}
+          setInterviewType={setInterviewType}
+          isTyping={isTyping}
+          drillMode={drillMode}
+          setDrillMode={setDrillMode}
+          apiKeyInput={apiKeyInput}
+          setApiKeyInput={setApiKeyInput}
+          apiKeyError={apiKeyError}
+          setApiKeyError={setApiKeyError}
+          onNeedKey={() => setStage("api-key")}
+          onKeySaved={() => setStage("setup")}
+        />
+      )}
       {/* ── Change Key Modal ── */}
       <AnimatePresence>
         {showKeyModal && (
@@ -641,212 +624,9 @@ export default function Home() {
         )}
       </AnimatePresence>
 
-      {/* ── Config Modal (Start Interview flow) ── */}
-      <AnimatePresence>
-        {showConfig && (stage === "api-key" || stage === "role-selection") && (
-          <motion.div key="config-modal"
-            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            style={{ position: "fixed", inset: 0, zIndex: 150, background: "rgba(0,0,0,0.8)", display: "flex", alignItems: "center", justifyContent: "center", padding: 24, overflowY: "auto" }}
-            onClick={(e) => { if (e.target === e.currentTarget) closeConfig(); }}
-          >
-            {stage === "api-key" && (
-              <motion.div key="api-key" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} transition={{ duration: 0.3 }}
-                style={{ width: "100%", maxWidth: 460, margin: "auto" }}
-              >
-                <div style={{ ...panel, padding: "44px 40px", textAlign: "center", position: "relative" }}>
-                  <button onClick={closeConfig} style={{ position: "absolute", top: 14, right: 14, background: "none", border: "none", color: "rgba(255,255,255,0.4)", cursor: "pointer", padding: 4 }}>
-                    <X size={16} />
-                  </button>
-                  {/* Icon */}
-                  <div style={{ width: 64, height: 64, borderRadius: 20, background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.12)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 24px", fontSize: 28 }}>
-                    🔑
-                  </div>
-
-                  <h2 style={{ fontSize: 24, fontWeight: 900, margin: "0 0 8px", letterSpacing: "-0.02em" }}>Connect Your AI</h2>
-                  <p style={{ fontSize: 13, color: "rgba(255,255,255,0.38)", lineHeight: 1.6, margin: "0 0 32px" }}>
-                    Paste your free Gemini API key to power your interview simulation.<br />
-                    Your key is <strong style={{ color: "rgba(255,255,255,0.6)" }}>never stored</strong> on our servers.
-                  </p>
-
-                  {/* Key Input */}
-                  <input
-                    type="password"
-                    value={apiKeyInput}
-                    onChange={e => { setApiKeyInput(e.target.value); setApiKeyError(""); }}
-                    onKeyDown={e => {
-                      if (e.key === "Enter") {
-                        if (apiKeyInput.trim().length < 10) { setApiKeyError("That doesn't look like a valid API key."); return; }
-                        saveGeminiKey(apiKeyInput);
-                        setUserApiKey(apiKeyInput.trim());
-                        setStage("role-selection");
-                      }
-                    }}
-                    placeholder="AIzaSy..."
-                    style={{ ...inputStyle, textAlign: "center", fontSize: 13, padding: "14px 16px", fontFamily: "monospace", letterSpacing: "0.06em", marginBottom: 8 }}
-                    autoFocus
-                  />
-                  {apiKeyError && <p style={{ fontSize: 11, color: "rgba(255,80,80,0.85)", marginBottom: 12 }}>{apiKeyError}</p>}
-
-                  {/* CTA */}
-                  <button
-                    onClick={() => {
-                      if (apiKeyInput.trim().length < 10) { setApiKeyError("That doesn't look like a valid API key."); return; }
-                      saveGeminiKey(apiKeyInput);
-                      setUserApiKey(apiKeyInput.trim());
-                      setStage("role-selection");
-                    }}
-                    style={{ width: "100%", padding: "14px 0", borderRadius: 11, border: "none", cursor: apiKeyInput.trim().length > 10 ? "pointer" : "not-allowed", background: apiKeyInput.trim().length > 10 ? "#fff" : "rgba(255,255,255,0.1)", color: apiKeyInput.trim().length > 10 ? "#000" : "rgba(255,255,255,0.3)", fontWeight: 700, fontSize: 12, letterSpacing: "0.1em", textTransform: "uppercase", transition: "all .2s", marginBottom: 20 }}>
-                    Activate Simulation Engine →
-                  </button>
-
-                  {/* Helper link */}
-                  <p style={{ fontSize: 11, color: "rgba(255,255,255,0.2)", lineHeight: 1.6 }}>
-                    Don't have one?{" "}
-                    <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noreferrer"
-                      style={{ color: "rgba(255,255,255,0.5)", textDecoration: "underline" }}>
-                      Get a free key at aistudio.google.com
-                    </a>
-                    {" "}— 1,500 requests/day, no credit card.
-                  </p>
-
-                  {/* Reassurance badges */}
-                  <div style={{ display: "flex", justifyContent: "center", gap: 16, marginTop: 20, marginBottom: 20 }}>
-                    {["🔒 Client-side only", "🚫 Never logged", "♻️ Cached for session"].map(t => (
-                      <span key={t} style={{ fontSize: 10, color: "rgba(255,255,255,0.2)", fontFamily: "monospace" }}>{t}</span>
-                    ))}
-                  </div>
-
-                  {/* Optional premium voice keys */}
-                  <button onClick={() => setShowVoiceKeys(p => !p)}
-                    style={{ width: "100%", background: "none", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 10, padding: "10px 14px", cursor: "pointer", color: "rgba(255,255,255,0.35)", fontSize: 11, textAlign: "left", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <span>🎙 Optional: Premium Voice (ElevenLabs + Deepgram)</span>
-                    <span style={{ fontSize: 10 }}>{showVoiceKeys ? "▲" : "▼"}</span>
-                  </button>
-                  {showVoiceKeys && (
-                    <div style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 8, textAlign: "left" }}>
-                      <p style={{ fontSize: 10, color: "rgba(255,255,255,0.25)", margin: "0 0 4px", lineHeight: 1.6 }}>
-                        Leave blank to use free browser TTS/STT. Add keys for human-quality AI voice and cross-browser mic support.
-                      </p>
-                      <input type="password" value={elInput} onChange={e => setElInput(e.target.value)} onBlur={() => { if (elInput.trim().length > 10) { setElevenLabsKey(elInput.trim()); saveElevenLabsKey(elInput.trim()); }}}
-                        placeholder="ElevenLabs API key (optional)"
-                        style={{ ...inputStyle, fontSize: 12, padding: "10px 14px", fontFamily: "monospace" }} />
-                      <input type="password" value={dgInput} onChange={e => setDgInput(e.target.value)} onBlur={() => { if (dgInput.trim().length > 10) { setDeepgramKey(dgInput.trim()); saveDeepgramKey(dgInput.trim()); }}}
-                        placeholder="Deepgram API key (optional)"
-                        style={{ ...inputStyle, fontSize: 12, padding: "10px 14px", fontFamily: "monospace" }} />
-                    </div>
-                  )}
-                </div>
-              </motion.div>
-            )}
-
-            {stage === "role-selection" && (
-              <motion.div key="setup" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} transition={{ duration: 0.3 }}
-                style={{ width: "100%", maxWidth: 520, margin: "auto" }}
-              >
-                <div style={{ ...panel, padding: "36px 32px", position: "relative" }}>
-                  <button onClick={closeConfig} style={{ position: "absolute", top: 14, right: 14, background: "none", border: "none", color: "rgba(255,255,255,0.4)", cursor: "pointer", padding: 4 }}>
-                    <X size={16} />
-                  </button>
-                  <div style={{ textAlign: "center", marginBottom: 24 }}>
-                    <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.14em", textTransform: "uppercase", color: "rgba(255,255,255,0.28)", margin: "0 0 6px" }}>Configure session</p>
-                    <h2 style={{ fontSize: 22, fontWeight: 900, margin: 0, letterSpacing: "-0.02em" }}>Build your interview</h2>
-                  </div>
-
-                  <div style={{ marginBottom: 22 }}>
-                    <CompanyPicker value={company} onChange={setCompany} />
-                    <p style={{ fontSize: 10, color: "rgba(255,255,255,0.22)", margin: "8px 0 0", textAlign: "center" }}>
-                      {getCompany(company).tagline} — questions match {company === "Agnostic" ? "your role" : `${getCompany(company).name}'s style`}
-                    </p>
-                  </div>
-
-                  {/* Interview type tabs */}
-                  <div style={{ display: "flex", background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 12, padding: 4, marginBottom: 20, flexWrap: "wrap", gap: 2 }}>
-                    {["Technical", "HR & Culture", "System Design", "Coding Round"].map(t => (
-                      <button key={t} onClick={() => setInterviewType(t)} style={{ flex: 1, minWidth: 72, padding: "9px 4px", fontSize: 9, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", borderRadius: 9, border: "none", cursor: "pointer", background: interviewType === t ? "#fff" : "transparent", color: interviewType === t ? "#000" : "rgba(255,255,255,0.33)", transition: "all .2s", display: "flex", alignItems: "center", justifyContent: "center", gap: 4 }}>
-                        {t === "Coding Round" && <Code2 size={10} />}{t}
-                      </button>
-                    ))}
-                  </div>
-
-                  {/* Role input */}
-                  <div style={{ marginBottom: 14 }}>
-                    <span style={label}>Job you're interviewing for</span>
-                    <input
-                      type="text" value={role}
-                      onChange={e => setRole(e.target.value)}
-                      onKeyDown={e => e.key === "Enter" && startInterview()}
-                      placeholder="e.g. Senior DevOps Engineer"
-                      style={{ ...inputStyle, fontSize: 14, padding: "13px 16px" }}
-                    />
-                  </div>
-
-                  {/* Tone + Timer + Language */}
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12, marginBottom: 16 }}>
-                    {[
-                      { lbl: "Interviewer style", val: persona, set: setPersona, opts: [["Harsh Tech Lead","Strict & direct"], ["Friendly Microsoft HR","Warm & structured"], ["Chaotic Startup Founder","Fast & casual"]] },
-                      { lbl: "Pace", val: timerMode, set: setTimerMode, opts: [["Practice Mode","No timer"], ["Pressure Mode","2 min / Q"], ["Rapid Fire","30 sec / Q"]] },
-                      { lbl: "Language", val: language, set: setLanguage, opts: [["English","English only"], ["Hinglish","Hindi + English mix"], ["Hindi","Full Hindi"]] },
-                    ].map(({ lbl, val, set, opts }) => (
-                      <div key={lbl}>
-                        <span style={label}>{lbl}</span>
-                        <select value={val} onChange={e => set(e.target.value)} style={{ ...inputStyle, padding: "9px 12px", fontSize: 11 }}>
-                          {opts.map(([v, l]) => <option key={v} value={v} style={{ background: "#111" }}>{l}</option>)}
-                        </select>
-                      </div>
-                    ))}
-                  </div>
-
-                  {/* Resume upload */}
-                  <div style={{ marginBottom: 18 }}>
-                    <label style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", background: "rgba(255,255,255,0.03)", border: `1px solid ${resumeContext ? "rgba(255,255,255,0.25)" : "rgba(255,255,255,0.08)"}`, borderRadius: 10, cursor: "pointer", transition: "all .2s" }}>
-                      <input type="file" accept=".pdf" style={{ display: "none" }} onChange={e => handleResumeUpload(e.target.files[0])} />
-                      {isParsingResume
-                        ? <Loader2 size={14} color="rgba(255,255,255,0.5)" style={{ animation: "spin 1s linear infinite" }} />
-                        : resumeContext
-                        ? <CheckCircle size={14} color="rgba(255,255,255,0.7)" />
-                        : <Upload size={14} color="rgba(255,255,255,0.35)" />}
-                      <span style={{ fontSize: 12, color: resumeContext ? "rgba(255,255,255,0.7)" : "rgba(255,255,255,0.3)" }}>
-                        {isParsingResume ? "Reading your resume…"
-                          : resumeContext ? `Resume loaded — ${resumeContext.recent_role || "profile ready"}`
-                          : "Upload resume PDF — questions tailored to you"}
-                      </span>
-                    </label>
-                  </div>
-
-                  {/* Drill mode banner */}
-                  {drillMode && (
-                    <div style={{ padding: "12px 16px", borderRadius: 10, background: "rgba(129,140,248,0.1)", border: "1px solid rgba(129,140,248,0.25)", marginBottom: 12, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                      <div>
-                        <p style={{ fontSize: 9, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "rgba(129,140,248,0.7)", margin: "0 0 2px" }}>Drill Mode Active</p>
-                        <p style={{ fontSize: 12, color: "rgba(255,255,255,0.6)", margin: 0 }}>{drillMode.weakness}</p>
-                      </div>
-                      <button onClick={() => setDrillMode(null)} style={{ background: "none", border: "none", cursor: "pointer", color: "rgba(255,255,255,0.3)", fontSize: 11 }}>✕</button>
-                    </div>
-                  )}
-
-                  {/* CTA */}
-                  <button
-                    onClick={startInterview}
-                    disabled={!role || isTyping || !userId || !userApiKey}
-                    style={{ width: "100%", padding: "15px 0", borderRadius: 12, border: "none", cursor: (!role || !userId || isTyping || !userApiKey) ? "not-allowed" : "pointer", background: (!role || !userId || isTyping || !userApiKey) ? "rgba(255,255,255,0.1)" : drillMode ? "rgba(129,140,248,0.9)" : "#fff", color: (!role || !userId || isTyping || !userApiKey) ? "rgba(255,255,255,0.35)" : "#000", fontWeight: 700, fontSize: 12, letterSpacing: "0.1em", textTransform: "uppercase", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, transition: "all .2s" }}>
-                    {isTyping ? <Loader2 size={15} style={{ animation: "spin 1s linear infinite" }} /> :
-                      !userId ? <><ShieldAlert size={14} /> Sign in to start</> :
-                      !userApiKey ? <><span style={{ fontSize: 13 }}>🔑</span> Add Gemini API key</> :
-                      drillMode ? <><Target size={14} /> Start Drill →</> :
-                      <><Rocket size={14} /> Enter the interview room</>}
-                  </button>
-
-                  {userId && userApiKey && role && (
-                    <p style={{ textAlign: "center", fontSize: 10, color: "rgba(255,255,255,0.2)", marginTop: 12, fontFamily: "monospace" }}>
-                      {getCompany(company).name} · {interviewType} · 5 questions · ~15 min
-                    </p>
-                  )}
-                </div>
-              </motion.div>
-            )}
-          </motion.div>
-        )}
-      </AnimatePresence>
+      {!showLanding && !showSetup && (
+    <div style={{ minHeight: "100vh", background: "#050505", color: "#fff", fontFamily: "var(--font-inter), Inter, sans-serif", position: "relative" }}>
+      <ShapeGrid />
 
       {/* NAV */}
       <nav style={{ position: "fixed", top: 0, left: 0, right: 0, zIndex: 50, display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 24px", height: 64, borderBottom: "1px solid rgba(255,255,255,0.06)", background: "rgba(5,5,5,0.8)", backdropFilter: "blur(20px)" }}>
@@ -876,11 +656,6 @@ export default function Home() {
       {/* MAIN */}
       <main style={{ position: "relative", zIndex: 10, minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", padding: "80px 24px 40px" }}>
         <AnimatePresence mode="wait">
-
-          {/* ══ HERO LANDING ═══════════════════════════════════════════════════ */}
-          {(stage === "landing" || stage === "api-key" || stage === "role-selection") && (
-            <LandingHero onStart={openConfig} />
-          )}
 
           {/* ══ INTERVIEW ════════════════════════════════════════════════════ */}
           {stage === "interview" && (
@@ -1261,5 +1036,7 @@ export default function Home() {
         * { box-sizing: border-box; }
       `}</style>
     </div>
+      )}
+    </>
   );
 }

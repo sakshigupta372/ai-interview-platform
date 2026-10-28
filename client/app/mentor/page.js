@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import axios from "axios";
 import { useAuth, UserButton } from "@clerk/nextjs";
 import { motion } from "framer-motion";
@@ -187,7 +188,7 @@ export default function MentorPage() {
   if (!userId) {
     return (
       <div style={{ minHeight: "100vh", background: "#050505", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff" }}>
-        <p>Sign in required. <a href="/" style={{ color: "rgba(255,255,255,0.5)" }}>Go home</a></p>
+        <p>Sign in required. <Link href="/" style={{ color: "rgba(255,255,255,0.5)" }}>Go home</Link></p>
       </div>
     );
   }
@@ -304,7 +305,7 @@ export default function MentorPage() {
                 {(coachData.coaching.next_steps || []).length > 0 && (
                   <div style={{ ...panel, padding: "22px 24px" }}>
                     <p style={{ fontSize: 9, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", color: "rgba(255,255,255,0.25)", margin: "0 0 14px", display: "flex", alignItems: "center", gap: 6 }}>
-                      <ListChecks size={11} /> This week's actions
+                      <ListChecks size={11} /> This week&apos;s actions
                     </p>
                     <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                       {coachData.coaching.next_steps.map((step, i) => (
