@@ -1,0 +1,129 @@
+html:has(.nx-room), body:has(.nx-room) {
+  background: #FBFAF7;
+  color: #0E1A3A;
+}
+
+.nx-room {
+  --ink: #0E1A3A;
+  --ink2: #36405F;
+  --muted: #596079;
+  --line2: #E3E5F1;
+  --bg: #FBFAF7;
+  --paper: #FFFFFF;
+  --peri: #EFF0FB;
+  --indigo: #4A3DF0;
+  --indigo-d: #3A2ED6;
+  min-height: 100vh;
+  background:
+    radial-gradient(900px 480px at 82% -8%, rgba(74, 61, 240, 0.10), transparent 58%),
+    radial-gradient(640px 380px at 8% 108%, rgba(248, 235, 217, 0.75), transparent 55%),
+    var(--bg);
+  color: var(--ink);
+  font-family: var(--font-dm-sans), "DM Sans", system-ui, sans-serif;
+  position: relative;
+}
+
+.nx-room-nav {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 50;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 28px; height: 72px;
+  border-bottom: 1px solid rgba(230, 227, 218, 0.7);
+  background: rgba(251, 250, 247, 0.86);
+  backdrop-filter: saturate(1.4) blur(10px);
+}
+.nx-room-logo {
+  display: flex; align-items: center; gap: 10px;
+  font-family: var(--font-manrope), Manrope, sans-serif;
+  font-weight: 800; font-size: 19px; letter-spacing: -0.02em;
+  color: var(--ink); background: none; border: none; cursor: pointer;
+}
+.nx-room-logo b { color: var(--indigo); font-weight: 800; }
+.nx-room-nav .nav-txt-btn {
+  font-size: 13px; color: var(--ink2);
+  font-family: inherit; font-weight: 600;
+  background: none; border: none; cursor: pointer;
+  padding: 8px 10px; border-radius: 8px;
+}
+.nx-room-nav .nav-txt-btn:hover { background: rgba(14, 26, 58, 0.04); color: var(--ink); }
+
+.nx-room-main {
+  position: relative; z-index: 10;
+  min-height: 100vh;
+  display: flex; align-items: center; justify-content: center;
+  padding: 88px 24px 32px;
+}
+
+.nx-room .interview-grid {
+  display: grid;
+  grid-template-columns: 1fr 280px;
+  gap: 16px;
+  height: 82vh;
+  width: 100%;
+  max-width: 1100px;
+}
+.nx-room .interview-sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.nx-speed {
+  display: flex; gap: 2px;
+  background: var(--peri);
+  border: 1px solid var(--line2);
+  border-radius: 999px; padding: 3px;
+}
+.nx-speed button {
+  flex: 1; border: none; cursor: pointer; font-family: inherit;
+  background: transparent; color: var(--muted);
+  font-size: 12px; font-weight: 700;
+  padding: 7px 6px; border-radius: 999px;
+}
+.nx-speed button.on {
+  background: #fff; color: var(--ink);
+  box-shadow: 0 1px 2px rgba(14, 26, 58, 0.08);
+}
+
+.nx-room .bounce-dot { animation: nx-room-bounce 0.6s ease-in-out infinite alternate; }
+@keyframes nx-room-bounce { from { transform: scaleY(0.5); } to { transform: scaleY(1.2); } }
+.nx-room .cursor-blink { animation: nx-room-blink 0.75s ease-in-out infinite; }
+@keyframes nx-room-blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
+.nx-room .timer-urgent {
+  animation: nx-room-timer 0.6s ease-in-out infinite;
+  border-color: #E5484D !important;
+  color: #E5484D !important;
+}
+@keyframes nx-room-timer {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(229, 72, 77, 0); }
+  50% { box-shadow: 0 0 0 4px rgba(229, 72, 77, 0.22); }
+}
+
+@media (max-width: 960px) {
+  .nx-room .interview-grid { grid-template-columns: 1fr; height: auto; min-height: 90vh; }
+  .nx-room .interview-sidebar { flex-direction: row; overflow-x: auto; padding-bottom: 4px; }
+  .nx-room .interview-sidebar > div { min-width: 180px; flex-shrink: 0; }
+}
+.nx-room .dashboard-stats {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 14px;
+  margin-bottom: 32px;
+}
+.nx-room .sw-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+.nx-room .dashboard-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 12px;
+}
+
+@media (max-width: 640px) {
+  .nx-room-nav { padding: 0 16px; height: 64px; }
+  .nx-room-nav .nav-txt-btn { display: none; }
+  .nx-room-main { padding: 80px 14px 20px; }
+  .nx-room .dashboard-stats { grid-template-columns: repeat(2, 1fr); }
+  .nx-room .sw-grid { grid-template-columns: 1fr; }
+  .nx-room .dashboard-actions { grid-template-columns: 1fr; }
+}

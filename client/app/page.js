@@ -6,21 +6,42 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   Zap,
   Mic, MicOff, Lightbulb, Target, Brain, Activity,
-  Download, Key, X,
+  Download, Key, X, Volume2, Video,
 } from "lucide-react";
 import { getApiBase } from "@/lib/api";
 import { APP_NAME, loadGeminiKey, saveGeminiKey } from "@/lib/brand";
 import { toast } from "@/lib/toast";
-import { speak as ttsSpeak, cancelSpeech, loadElevenLabsKey, saveElevenLabsKey } from "@/lib/tts";
+import { speak as ttsSpeak, cancelSpeech, loadElevenLabsKey, saveElevenLabsKey, unlockSpeech, primeInterviewerVoice, setVoiceSpeed, loadVoiceSpeed, playAck, warmupAcks, flushSpokenSentences } from "@/lib/tts";
+import { interviewerTitle, interviewerPromptRole, toneLabel } from "@/lib/persona";
 import { DeepgramSTT, loadDeepgramKey, saveDeepgramKey } from "@/lib/deepgramSTT";
 import InterviewerAvatar from "@/components/InterviewerAvatar";
+import VideoCallPanel from "@/components/VideoCallPanel";
 import LandingPage from "@/components/LandingPage";
 import SetupEngine from "@/components/SetupEngine";
+import "@/app/room.css";
 import { getCompany } from "@/lib/companies";
 import { useAuth, useUser, SignInButton, UserButton } from "@clerk/nextjs";
 import dynamic from "next/dynamic";
 
 const CodeEditor = dynamic(() => import("@/components/CodeEditor"), { ssr: false });
+
+const SETUP_DRAFT_KEY = "nexus_setup_draft";
+
+function readSetupDraft() {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = sessionStorage.getItem(SETUP_DRAFT_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+function writeSetupDraft(draft) {
+  try { sessionStorage.setItem(SETUP_DRAFT_KEY, JSON.stringify(draft)); } catch {}
+}
+function clearSetupDraft() {
+  try { sessionStorage.removeItem(SETUP_DRAFT_KEY); } catch {}
+}
 
 // ─── ShapeGrid (canvas) ───────────────────────────────────────────────────────
 function ShapeGrid() {
@@ -48,11 +69,11 @@ function ShapeGrid() {
           const dx = mouse.current.x - cx, dy = mouse.current.y - cy;
           const dist = Math.sqrt(dx * dx + dy * dy);
           const inf = Math.max(0, 1 - dist / 140);
-          const a = 0.055 + inf * 0.35;
+          const a = 0.045 + inf * 0.22;
           const s = (cell * 0.3) * (1 + inf * 0.5);
           ctx.save(); ctx.translate(cx, cy);
           ctx.globalAlpha = a;
-          ctx.fillStyle = "#fff";
+          ctx.fillStyle = "#4A3DF0";
           const t = (r + cl) % 3;
           if (t === 0) { ctx.fillRect(-s / 2, -s / 2, s, s); }
           else if (t === 1) { ctx.beginPath(); ctx.arc(0, 0, s / 2, 0, Math.PI * 2); ctx.fill(); }
@@ -76,63 +97,75 @@ function TypewriterText({ text, delay = 18 }) {
     const id = setInterval(() => { setOut(p => p + text.charAt(i)); i++; if (i >= text.length) clearInterval(id); }, delay);
     return () => clearInterval(id);
   }, [text]);
-  return <p style={{ whiteSpace: "pre-wrap", lineHeight: 1.7, color: "rgba(255,255,255,0.88)" }}>{out}</p>;
+  return <p style={{ whiteSpace: "pre-wrap", lineHeight: 1.7, color: "#0E1A3A", margin: 0 }}>{out}</p>;
 }
 
 // ─── Small metre bar ─────────────────────────────────────────────────────────
 function Meter({ label, value }) {
   return (
     <div style={{ marginBottom: 16 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: "rgba(255,255,255,0.4)", marginBottom: 6 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: "#596079", marginBottom: 6 }}>
         <span>{label}</span><span style={{ fontFamily: "monospace" }}>{Math.floor(value)}%</span>
       </div>
-      <div style={{ width: "100%", height: 2, background: "rgba(255,255,255,0.08)", borderRadius: 99 }}>
-        <div style={{ width: `${value}%`, height: "100%", background: "rgba(255,255,255,0.6)", borderRadius: 99, transition: "width .4s" }} />
+      <div style={{ width: "100%", height: 2, background: "#ECEBFE", borderRadius: 99 }}>
+        <div style={{ width: `${value}%`, height: "100%", background: "#4A3DF0", borderRadius: 99, transition: "width .4s" }} />
       </div>
     </div>
   );
 }
 
 // ─── Shared panel style ───────────────────────────────────────────────────────
-const panel = { background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.09)", borderRadius: 20, backdropFilter: "blur(20px)" };
-const label = { fontSize: 10, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: "rgba(255,255,255,0.28)", marginBottom: 6, display: "block" };
-const inputStyle = { width: "100%", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 10, padding: "10px 14px", fontSize: 13, color: "#fff", outline: "none", boxSizing: "border-box" };
+const panel = { background: "#FFFFFF", border: "1px solid #E3E5F1", borderRadius: 20, boxShadow: "0 1px 2px rgba(14,26,58,.04), 0 18px 40px -22px rgba(14,26,58,.28)" };
+const label = { fontSize: 10, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: "#596079", marginBottom: 6, display: "block" };
+const inputStyle = { width: "100%", background: "#FBFAF7", border: "1px solid #E3E5F1", borderRadius: 10, padding: "10px 14px", fontSize: 13, color: "#0E1A3A", outline: "none", boxSizing: "border-box" };
 
 // ─── Chat message with ideal-answer toggle ────────────────────────────────────
-function ChatMessage({ msg, isLast, isTyping }) {
+function ChatMessage({ msg, onPlay }) {
   const [showIdeal, setShowIdeal] = useState(false);
   const ev = msg.evaluation;
+  const isAi = msg.role === "ai";
   return (
     <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}
-      style={{ display: "flex", justifyContent: msg.role === "ai" ? "flex-start" : "flex-end", paddingLeft: msg.isFollowUp ? 24 : 0 }}>
-      <div style={{ maxWidth: "82%", borderRadius: msg.role === "ai" ? "4px 18px 18px 18px" : "18px 4px 18px 18px", padding: "14px 18px", background: msg.role === "ai" ? "rgba(255,255,255,0.04)" : "rgba(255,255,255,0.08)", border: `1px solid rgba(255,255,255,${msg.role === "ai" ? "0.07" : "0.13"})`, fontSize: 13, lineHeight: 1.65 }}>
-        {msg.role === "ai" && isLast && !ev && !isTyping
-          ? <TypewriterText text={msg.text} />
-          : <p style={{ margin: 0, whiteSpace: "pre-wrap" }}>{msg.text}</p>}
+      style={{ display: "flex", justifyContent: isAi ? "flex-start" : "flex-end", paddingLeft: msg.isFollowUp ? 24 : 0 }}>
+      <div style={{
+        maxWidth: "88%",
+        borderRadius: isAi ? "4px 18px 18px 18px" : "18px 4px 18px 18px",
+        padding: "14px 18px",
+        background: isAi ? "#EFF0FB" : "#FFFFFF",
+        border: `1px solid ${isAi ? "#DCE0FA" : "#E3E5F1"}`,
+        fontSize: 13, lineHeight: 1.65, color: "#0E1A3A",
+      }}>
+        <p style={{ margin: 0, whiteSpace: "pre-wrap" }}>{msg.text}</p>
+        {isAi && onPlay && (
+          <button type="button" onClick={() => { unlockSpeech(); primeInterviewerVoice(); onPlay(msg.text); }} aria-label="Play question"
+            style={{ marginTop: 10, display: "inline-flex", alignItems: "center", gap: 6, background: "#fff", border: "1px solid #DCE0FA", color: "#4A3DF0", borderRadius: 8, padding: "5px 10px", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>
+            <Volume2 size={13} /> Listen
+          </button>
+        )}
         {ev && (
-          <div style={{ marginTop: 14, paddingTop: 14, borderTop: "1px solid rgba(255,255,255,0.08)" }}>
+          <div style={{ marginTop: 14, paddingTop: 14, borderTop: "1px solid #E3E5F1" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-              <span style={{ fontSize: 10, color: "rgba(255,255,255,0.3)", letterSpacing: "0.08em", textTransform: "uppercase" }}>Neural Score</span>
-              <span style={{ fontSize: 18, fontWeight: 900, color: ev.score >= 7 ? "#fff" : "rgba(255,255,255,0.5)" }}>{ev.score}<span style={{ fontSize: 11, color: "rgba(255,255,255,0.2)" }}>/10</span></span>
+              <span style={{ fontSize: 10, color: "#596079", letterSpacing: "0.08em", textTransform: "uppercase" }}>Score</span>
+              <span style={{ fontSize: 18, fontWeight: 800, color: ev.score >= 7 ? "#0B6B60" : "#0E1A3A" }}>{ev.score}<span style={{ fontSize: 11, color: "#9AA0B8" }}>/10</span></span>
             </div>
-            <div style={{ width: "100%", height: 2, background: "rgba(255,255,255,0.08)", borderRadius: 99, marginBottom: 8 }}>
-              <div style={{ width: `${ev.score * 10}%`, height: "100%", background: "#fff", borderRadius: 99 }} />
+            <div style={{ width: "100%", height: 2, background: "#ECEBFE", borderRadius: 99, marginBottom: 8 }}>
+              <div style={{ width: `${ev.score * 10}%`, height: "100%", background: "#4A3DF0", borderRadius: 99 }} />
             </div>
             {ev.time_complexity && (
               <div style={{ display: "flex", gap: 10, marginBottom: 6 }}>
-                <span style={{ fontSize: 10, color: "rgba(255,255,255,0.4)", fontFamily: "monospace" }}>T: {ev.time_complexity}</span>
-                <span style={{ fontSize: 10, color: "rgba(255,255,255,0.4)", fontFamily: "monospace" }}>S: {ev.space_complexity}</span>
+                <span style={{ fontSize: 10, color: "#596079", fontFamily: "monospace" }}>T: {ev.time_complexity}</span>
+                <span style={{ fontSize: 10, color: "#596079", fontFamily: "monospace" }}>S: {ev.space_complexity}</span>
               </div>
             )}
-            <p style={{ margin: "0 0 8px", fontSize: 11, color: "rgba(255,255,255,0.35)", fontStyle: "italic" }}>{ev.suggestions}</p>
+            <p style={{ margin: "0 0 8px", fontSize: 11, color: "#596079", fontStyle: "italic" }}>{ev.suggestions}</p>
             {ev.ideal_answer && (
               <>
                 <button onClick={() => setShowIdeal(p => !p)}
-                  style={{ fontSize: 10, color: "rgba(255,255,255,0.3)", background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 6, padding: "4px 10px", cursor: "pointer", letterSpacing: "0.06em", textTransform: "uppercase" }}>
+                  style={{ fontSize: 10, color: "#4A3DF0", background: "#ECEBFE", border: "1px solid #DCE0FA", borderRadius: 6, padding: "4px 10px", cursor: "pointer", letterSpacing: "0.06em", textTransform: "uppercase" }}>
                   {showIdeal ? "Hide" : "Show"} ideal answer
                 </button>
                 {showIdeal && (
-                  <div style={{ marginTop: 10, padding: "10px 14px", background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 10, fontSize: 12, color: "rgba(255,255,255,0.55)", lineHeight: 1.65, whiteSpace: "pre-wrap" }}>
+                  <div style={{ marginTop: 10, padding: "10px 14px", background: "#FBFAF7", border: "1px solid #E3E5F1", borderRadius: 10, fontSize: 12, color: "#36405F", lineHeight: 1.65, whiteSpace: "pre-wrap" }}>
                     {ev.ideal_answer}
                   </div>
                 )}
@@ -191,6 +224,7 @@ export default function Home() {
   const { user } = useUser();
 
   const [stage, setStage] = useState("landing");
+  const [startError, setStartError] = useState("");
   const [apiKeyInput, setApiKeyInput] = useState("");
   const [apiKeyError, setApiKeyError] = useState("");
   const [showKeyModal, setShowKeyModal] = useState(false);
@@ -200,6 +234,8 @@ export default function Home() {
   const [company, setCompany] = useState("Agnostic");
   const [interviewType, setInterviewType] = useState("Technical");
   const [timerMode, setTimerMode] = useState("Pressure Mode");
+  const [language, setLanguage] = useState("English");
+  const [voiceSpeed, setVoiceSpeedState] = useState(1.5);
 
   const [sessionId, setSessionId] = useState("");
   const [userApiKey, setUserApiKey] = useState("");
@@ -233,7 +269,23 @@ export default function Home() {
         sessionStorage.removeItem("nexus_drill_context");
       }
     }
+    setVoiceSpeedState(loadVoiceSpeed());
+    const draft = readSetupDraft();
+    if (draft?.open) {
+      if (draft.interviewType) setInterviewType(draft.interviewType);
+      if (typeof draft.role === "string") setRole(draft.role);
+      if (draft.company) setCompany(draft.company);
+      if (draft.persona) setPersona(draft.persona);
+      if (draft.timerMode) setTimerMode(draft.timerMode);
+      if (draft.language) setLanguage(draft.language);
+      setStage(draft.stage === "api-key" ? "api-key" : "setup");
+    }
   }, [isLoaded, userId]);
+
+  useEffect(() => {
+    if (stage !== "setup" && stage !== "api-key") return;
+    writeSetupDraft({ open: true, stage, interviewType, role, company, persona, timerMode, language });
+  }, [stage, interviewType, role, company, persona, timerMode, language]);
 
   const playTone = (freq = 880, dur = 0.08) => {
     try {
@@ -264,8 +316,6 @@ export default function Home() {
   const [liveConfidence, setLiveConfidence] = useState(0);
   const [timeLeft, setTimeLeft] = useState(120);
 
-  const [language, setLanguage] = useState("English"); // "English" | "Hindi" | "Hinglish"
-
   const recognitionRef = useRef(null);
   const synthRef = useRef(null);
   const chatEndRef = useRef(null);
@@ -273,6 +323,10 @@ export default function Home() {
   const audioCtxRef = useRef(null);
   const dgInterimRef = useRef("");
   const timerRef = useRef(null);
+  const submitLock = useRef(false);
+  const busyRef = useRef(false);
+  const lastScoreRef = useRef(5);
+  const spokenUpTo = useRef(0);
 
   // Voice setup — browser SR as fallback
   useEffect(() => {
@@ -280,49 +334,94 @@ export default function Home() {
     synthRef.current = window.speechSynthesis;
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SR) return;
-    const r = new SR(); r.continuous = true; r.interimResults = true;
-    r.onresult = (e) => { let t = ""; for (let i = e.resultIndex; i < e.results.length; i++) t += e.results[i][0].transcript; setAnswer(t); };
-    r.onerror = () => setIsRecording(false); r.onend = () => setIsRecording(false);
+    const r = new SR(); r.continuous = true; r.interimResults = true; r.lang = "en-IN";
+    r.onresult = (e) => {
+      let t = "";
+      for (let i = 0; i < e.results.length; i++) t += e.results[i][0].transcript;
+      setAnswer(t);
+    };
+    r.onerror = (ev) => {
+      setIsRecording(false);
+      const err = ev?.error;
+      if (err === "not-allowed") toast.error("Allow microphone access to answer by voice.");
+      else if (err === "no-speech") toast.error("No speech heard. Click the mic and try again.");
+      else if (err && err !== "aborted") toast.error("Microphone error. Check Chrome permissions and try again.");
+    };
+    r.onend = () => setIsRecording(false);
     recognitionRef.current = r;
   }, []);
 
-  const toggleRecording = () => {
-    if (isRecording) {
-      if (deepgramRef.current) {
-        deepgramRef.current.stop();
-        deepgramRef.current = null;
-        setAnswer(prev => prev + (dgInterimRef.current ? " " + dgInterimRef.current : ""));
-        dgInterimRef.current = "";
-      } else if (recognitionRef.current) {
-        recognitionRef.current.stop();
-      }
-      setIsRecording(false);
-    } else {
-      setAnswer("");
+  const stopListening = () => {
+    if (deepgramRef.current) {
+      deepgramRef.current.stop();
+      deepgramRef.current = null;
+      setAnswer(prev => prev + (dgInterimRef.current ? " " + dgInterimRef.current : ""));
       dgInterimRef.current = "";
-      if (deepgramKey?.trim().length > 10) {
-        const dg = new DeepgramSTT(deepgramKey.trim());
-        deepgramRef.current = dg;
-        dg.start({
-          onInterim: (t) => { dgInterimRef.current = t; setAnswer(dgInterimRef.current); },
-          onFinal: (t) => { dgInterimRef.current = ""; setAnswer(prev => (prev + " " + t).trim()); },
-          onError: (e) => { console.warn("Deepgram:", e); deepgramRef.current = null; setIsRecording(false); },
-        });
-        setIsRecording(true);
-      } else if (recognitionRef.current) {
-        recognitionRef.current.start();
-        setIsRecording(true);
-      } else {
-        toast.error("Use Chrome/Edge for voice, or add a Deepgram key for cross-browser support.");
-      }
+    } else if (recognitionRef.current) {
+      try { recognitionRef.current.stop(); } catch {}
+    }
+    setIsRecording(false);
+  };
+
+  const startListening = async (clear = false) => {
+    if (isRecording || isCodingRound) return;
+    unlockSpeech();
+    try {
+      await navigator.mediaDevices.getUserMedia({ audio: true });
+    } catch {
+      toast.error("Allow microphone access in the browser popup, then click the mic.");
+      return;
+    }
+    if (clear) setAnswer("");
+    dgInterimRef.current = "";
+    if (deepgramKey?.trim().length > 10) {
+      const dg = new DeepgramSTT(deepgramKey.trim());
+      deepgramRef.current = dg;
+      dg.start({
+        onInterim: (t) => { dgInterimRef.current = t; setAnswer(dgInterimRef.current); },
+        onFinal: (t) => { dgInterimRef.current = ""; setAnswer(prev => (prev + " " + t).trim()); },
+        onError: (e) => { console.warn("Deepgram:", e); deepgramRef.current = null; setIsRecording(false); },
+      });
+      setIsRecording(true);
+      return;
+    }
+    if (!recognitionRef.current) {
+      toast.error("Use Chrome or Edge to answer by voice.");
+      return;
+    }
+    try {
+      recognitionRef.current.start();
+      setIsRecording(true);
+    } catch (e) {
+      toast.error("Could not start the microphone. Click the mic and try again.");
     }
   };
 
+  const toggleRecording = () => {
+    if (isRecording) stopListening();
+    else startListening(true);
+  };
+
+  const speechHooks = {
+    onStart: () => setIsAiSpeaking(true),
+    onEnd: () => setIsAiSpeaking(false),
+  };
+
   const speak = (text) => {
-    ttsSpeak(text, persona, elevenLabsKey, {
-      onStart: () => setIsAiSpeaking(true),
-      onEnd:   () => setIsAiSpeaking(false),
-    }, language);
+    if (!text?.trim()) return;
+    ttsSpeak(text, persona, elevenLabsKey, speechHooks, language).then((ok) => {
+      if (ok === false) toast.error("Could not play interviewer voice. Unmute the Chrome tab and click Listen.");
+    }).catch(() => setIsAiSpeaking(false));
+  };
+
+  const speakStream = (text, extra) => {
+    spokenUpTo.current = flushSpokenSentences(
+      text,
+      spokenUpTo.current,
+      language,
+      speechHooks,
+      extra
+    );
   };
 
   // Live meters
@@ -340,7 +439,11 @@ export default function Home() {
     const start = timerMode === "Rapid Fire" ? 30 : 120; setTimeLeft(start);
     timerRef.current = setInterval(() => {
       setTimeLeft(p => {
-        if (p <= 1) { clearInterval(timerRef.current); submitAnswer("Time up."); return 0; }
+        if (p <= 1) {
+          clearInterval(timerRef.current);
+          if (!busyRef.current) submitAnswer("Time up.");
+          return 0;
+        }
         if (p === 30) playTone(440, 0.18);          // 30s warning — low tick
         else if (p <= 10) playTone(660, 0.07);      // last 10s — faster ticking
         return p - 1;
@@ -360,6 +463,8 @@ export default function Home() {
     setStage("setup");
   };
   const closeConfig = () => {
+    clearSetupDraft();
+    setStartError("");
     setStage("landing");
     if (typeof window !== "undefined" && window.location.hash) {
       window.history.replaceState(null, "", window.location.pathname || "/");
@@ -451,86 +556,181 @@ export default function Home() {
     setIsTyping(true);
     setStreamingText("");
     setChatHistory([]);
-    setStage("interview");
+    setStartError("");
+    unlockSpeech();
+    if (!isCodingRound) warmupAcks(language);
+    spokenUpTo.current = 0;
     const co = getCompany(company);
     const companyLabel = company === "Agnostic" ? "a tech company" : company;
-    const ctx = `A ${persona} acting as a ${interviewType} interviewer at ${companyLabel} (${co.tagline}), for a ${role} position.`;
+    const ctx = interviewerPromptRole(persona, interviewType, companyLabel, co.tagline, role);
     let accum = "";
+    let gotSession = false;
+    let failMsg = "";
+    let appended = false;
+    busyRef.current = true;
     try {
       await readSSEStream(
         `${apiBase}/interview/stream-start`,
         { role: ctx, clerkId: userId, userApiKey, resumeContext: resumeContext || undefined, isCodingRound, candidateName: getCandidateName() || undefined, drillFocus: drillMode?.weakness || undefined, language },
-        (chunk) => { accum += chunk; setStreamingText(accum); },
-        (sid) => { setSessionId(sid); setCurrentDifficulty("Medium"); },
+        (chunk) => {
+          accum += chunk;
+          setStreamingText(accum);
+          if (!isCodingRound) speakStream(accum);
+        },
+        (sid) => {
+          gotSession = true;
+          setSessionId(sid);
+          setCurrentDifficulty("Medium");
+          clearSetupDraft();
+          setStage("interview");
+        },
         (fullQuestion) => {
+          if (appended) return;
+          appended = true;
           setStreamingText("");
           setChatHistory([{ role: "ai", text: fullQuestion, isInitial: true }]);
-          if (!isCodingRound) speak(fullQuestion);
+          if (!gotSession) {
+            gotSession = true;
+            clearSetupDraft();
+            setStage("interview");
+          }
+          if (!isCodingRound) speakStream(fullQuestion, { final: true });
         },
         (err) => {
           const onLiveSite = typeof window !== "undefined" && window.location.hostname.includes("vercel.app");
           const missingApiUrl = onLiveSite && apiBase.includes("localhost");
-          const msg = missingApiUrl
+          failMsg = missingApiUrl
             ? "Backend not configured. Set NEXT_PUBLIC_API_URL on Vercel to your Render URL, then redeploy."
             : err || "Could not reach the server. Render may be waking up (~60s on free tier). Wait a moment and try again.";
-          toast.error(msg);
+          toast.error(failMsg);
+          setStartError(failMsg);
           setStage("setup");
         }
       );
+      if (!gotSession && !failMsg) {
+        failMsg = "Could not start the interview. Make sure the backend is running, then try again.";
+        toast.error(failMsg);
+        setStartError(failMsg);
+        setStage("setup");
+      }
     } catch (err) {
       toast.error("Could not reach the server. Wait a moment and try again.");
+      setStartError("Could not reach the server. Wait a moment and try again.");
       setStage("setup");
     } finally {
       setIsTyping(false);
+      busyRef.current = false;
     }
   };
 
   const submitAnswer = async (forced = null) => {
-    if (isRecording) toggleRecording();
-    cancelSpeech();
+    if (submitLock.current || busyRef.current) return;
     const userAns = forced || answer;
     if (!userAns.trim()) return;
+    submitLock.current = true;
+    busyRef.current = true;
+    if (isRecording) stopListening();
+    cancelSpeech();
+    unlockSpeech();
+    if (!isCodingRound) playAck(language);
+    spokenUpTo.current = 0;
     clearInterval(timerRef.current);
     const hist = [...chatHistory, { role: "user", text: userAns }];
     setChatHistory(hist);
     setAnswer("");
     setIsTyping(true);
     setStreamingText("");
-    setTimeout(() => setIsAdjusting(true), 1200);
-    try {
-      // Step 1: fast evaluation (JSON)
-      const res = await axios.post(
-        `${apiBase}/interview/evaluate`,
-        { sessionId, answer: userAns, userApiKey, isCodingRound, language },
-        { timeout: 90000 }
-      );
-      const { evaluation, isComplete, sessionSummary, nextDifficulty } = res.data;
-      const withEval = [...hist];
-      withEval[withEval.length - 1].evaluation = evaluation;
-      setChatHistory(withEval);
-      setIsAdjusting(false);
+    setIsAdjusting(false);
+
+    const applyEval = (data) => {
+      if (!data) return;
+      const { evaluation, sessionSummary } = data;
+      if (evaluation) {
+        lastScoreRef.current = evaluation.score ?? lastScoreRef.current;
+        setChatHistory((prev) => {
+          const next = [...prev];
+          for (let i = next.length - 1; i >= 0; i--) {
+            if (next[i].role === "user" && !next[i].evaluation) {
+              next[i] = { ...next[i], evaluation };
+              break;
+            }
+          }
+          return next;
+        });
+      }
       if (sessionSummary) {
         setStrengths(sessionSummary.globalStrengths || []);
         setWeaknesses(sessionSummary.globalWeaknesses || []);
         setCurrentDifficulty(sessionSummary.currentDifficulty || "Medium");
       }
-      if (isComplete) {
-        setFinalSummary(sessionSummary);
-        setStage("debrief");
+    };
+
+    const answeredCount = hist.filter((m) => m.role === "user").length;
+    const isLastTurn = answeredCount >= 5;
+
+    const runEval = () => axios.post(
+      `${apiBase}/interview/evaluate`,
+      { sessionId, answer: userAns, userApiKey, isCodingRound, language },
+      { timeout: 90000 }
+    ).then((res) => {
+      applyEval(res.data);
+      return res.data;
+    }).catch((err) => {
+      console.warn("evaluate:", err?.response?.data?.error || err.message);
+      return null;
+    });
+
+    try {
+      if (isLastTurn) {
+        const data = await runEval();
         setIsTyping(false);
+        if (data?.isComplete || data?.sessionSummary) {
+          setFinalSummary(data.sessionSummary || data);
+          setStage("debrief");
+        } else {
+          toast.error("Could not finish evaluation. Try submit again.");
+          setChatHistory(hist.slice(0, -1));
+          setAnswer(userAns);
+        }
         return;
       }
-      // Step 2: stream next question
+
+      let evalStarted = false;
+      const startEval = () => {
+        if (evalStarted) return;
+        evalStarted = true;
+        runEval();
+      };
+
       let accum = "";
+      let appended = false;
       await readSSEStream(
         `${apiBase}/interview/stream-next`,
-        { sessionId, answer: userAns, userApiKey, resumeContext: resumeContext || undefined, isCodingRound, candidateName: getCandidateName() || undefined, evaluationScore: evaluation.score, nextDifficulty: nextDifficulty || currentDifficulty, language },
-        (chunk) => { accum += chunk; setStreamingText(accum); },
+        {
+          sessionId,
+          answer: userAns,
+          userApiKey,
+          resumeContext: resumeContext || undefined,
+          isCodingRound,
+          candidateName: getCandidateName() || undefined,
+          evaluationScore: lastScoreRef.current,
+          nextDifficulty: currentDifficulty,
+          language,
+        },
+        (chunk) => {
+          accum += chunk;
+          setStreamingText(accum);
+          startEval();
+          if (!isCodingRound) speakStream(accum);
+        },
         null,
         (fullQuestion) => {
+          if (appended) return;
+          appended = true;
+          startEval();
           setStreamingText("");
-          setChatHistory(prev => [...prev, { role: "ai", text: fullQuestion, isFollowUp: true }]);
-          if (!isCodingRound) speak(fullQuestion);
+          setChatHistory((prev) => [...prev, { role: "ai", text: fullQuestion, isFollowUp: true }]);
+          if (!isCodingRound) speakStream(fullQuestion, { final: true });
         },
         (err) => { toast.error(err || "Could not get next question. Try again."); }
       );
@@ -542,9 +742,11 @@ export default function Home() {
       toast.error(msg);
       setChatHistory(hist.slice(0, -1));
       setAnswer(userAns);
-      setIsAdjusting(false);
     } finally {
       setIsTyping(false);
+      setIsAdjusting(false);
+      busyRef.current = false;
+      submitLock.current = false;
     }
   };
 
@@ -591,6 +793,9 @@ export default function Home() {
           setApiKeyError={setApiKeyError}
           onNeedKey={() => setStage("api-key")}
           onKeySaved={() => setStage("setup")}
+          startError={startError}
+          language={language}
+          setLanguage={setLanguage}
         />
       )}
       {/* ── Change Key Modal ── */}
@@ -598,16 +803,16 @@ export default function Home() {
         {showKeyModal && (
           <motion.div key="key-modal"
             initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            style={{ position: "fixed", inset: 0, zIndex: 200, background: "rgba(0,0,0,0.75)", display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}
+            style={{ position: "fixed", inset: 0, zIndex: 200, background: "rgba(14,26,58,0.45)", display: "flex", alignItems: "center", justifyContent: "center", padding: 24, backdropFilter: "blur(8px)" }}
             onClick={(e) => { if (e.target === e.currentTarget) setShowKeyModal(false); }}
           >
             <motion.div initial={{ scale: 0.95, y: 10 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.95, y: 10 }}
               style={{ ...panel, padding: "36px 32px", width: "100%", maxWidth: 420, position: "relative" }}>
-              <button onClick={() => setShowKeyModal(false)} style={{ position: "absolute", top: 14, right: 14, background: "none", border: "none", color: "rgba(255,255,255,0.4)", cursor: "pointer", padding: 4 }}>
+              <button onClick={() => setShowKeyModal(false)} style={{ position: "absolute", top: 14, right: 14, background: "none", border: "none", color: "#9AA0B8", cursor: "pointer", padding: 4 }}>
                 <X size={16} />
               </button>
-              <h2 style={{ fontSize: 20, fontWeight: 900, margin: "0 0 6px" }}>Change Gemini Key</h2>
-              <p style={{ fontSize: 12, color: "rgba(255,255,255,0.35)", margin: "0 0 24px", lineHeight: 1.6 }}>Your current key will be replaced for this session.</p>
+              <h2 style={{ fontSize: 20, fontWeight: 800, margin: "0 0 6px", color: "#0E1A3A" }}>Change Gemini Key</h2>
+              <p style={{ fontSize: 12, color: "#596079", margin: "0 0 24px", lineHeight: 1.6 }}>Your current key will be replaced for this session.</p>
               <input type="password" value={apiKeyInput}
                 onChange={e => { setApiKeyInput(e.target.value); setApiKeyError(""); }}
                 onKeyDown={e => e.key === "Enter" && confirmNewKey()}
@@ -616,7 +821,7 @@ export default function Home() {
               />
               {apiKeyError && <p style={{ fontSize: 11, color: "rgba(255,80,80,0.85)", marginBottom: 12 }}>{apiKeyError}</p>}
               <button onClick={confirmNewKey}
-                style={{ width: "100%", padding: "13px 0", borderRadius: 10, border: "none", cursor: "pointer", background: apiKeyInput.trim().length > 10 ? "#fff" : "rgba(255,255,255,0.1)", color: apiKeyInput.trim().length > 10 ? "#000" : "rgba(255,255,255,0.3)", fontWeight: 700, fontSize: 12, letterSpacing: "0.1em", textTransform: "uppercase", marginTop: 4 }}>
+                style={{ width: "100%", padding: "13px 0", borderRadius: 12, border: "none", cursor: "pointer", background: apiKeyInput.trim().length > 10 ? "#4A3DF0" : "#E3E5F1", color: apiKeyInput.trim().length > 10 ? "#fff" : "#9AA0B8", fontWeight: 600, fontSize: 14, marginTop: 4 }}>
                 Update Key →
               </button>
             </motion.div>
@@ -625,25 +830,32 @@ export default function Home() {
       </AnimatePresence>
 
       {!showLanding && !showSetup && (
-    <div style={{ minHeight: "100vh", background: "#050505", color: "#fff", fontFamily: "var(--font-inter), Inter, sans-serif", position: "relative" }}>
+    <div className="nx-room">
       <ShapeGrid />
 
       {/* NAV */}
-      <nav style={{ position: "fixed", top: 0, left: 0, right: 0, zIndex: 50, display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 24px", height: 64, borderBottom: "1px solid rgba(255,255,255,0.06)", background: "rgba(5,5,5,0.8)", backdropFilter: "blur(20px)" }}>
-        <span style={{ fontWeight: 900, letterSpacing: "0.18em", fontSize: 13, textTransform: "uppercase" }}>NEXUS<span style={{ color: "rgba(255,255,255,0.3)" }}>.AI</span></span>
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+      <nav className="nx-room-nav">
+        <button type="button" className="nx-room-logo" onClick={() => { clearSetupDraft(); setStage("landing"); }} aria-label="Back to home">
+          <svg width="30" height="30" viewBox="0 0 30 30" aria-hidden="true">
+            <rect x="1" y="1" width="28" height="28" rx="9" fill="#0E1A3A" />
+            <path d="M10 20.5V9.5l10 11V9.5" stroke="#fff" strokeWidth="2.4" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+            <circle cx="20" cy="9.5" r="2.6" fill="#4A3DF0" stroke="#fff" strokeWidth="1.2" />
+          </svg>
+          <span>NEXUS<b>.AI</b></span>
+        </button>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           {isLoaded && !userId && (
-            <div style={{ border: "1px solid rgba(255,255,255,0.2)", borderRadius: 10, padding: "8px 20px", fontSize: 12, fontWeight: 600, cursor: "pointer", transition: "all .2s" }}>
-              <SignInButton mode="modal" />
-            </div>
+            <SignInButton mode="modal">
+              <button type="button" className="nav-txt-btn">Log in</button>
+            </SignInButton>
           )}
           {isLoaded && userId && (
             <>
-              <button onClick={() => window.location.href = "/mentor"} className="nav-txt-btn">Mentor →</button>
-              <button onClick={() => window.location.href = "/profile"} className="nav-txt-btn">History →</button>
+              <button onClick={() => window.location.href = "/mentor"} className="nav-txt-btn">Mentor</button>
+              <button onClick={() => window.location.href = "/profile"} className="nav-txt-btn">History</button>
               {userApiKey && (
                 <button onClick={handleChangeKey} title="Change Gemini API Key"
-                  style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, padding: "7px 10px", color: "rgba(255,255,255,0.4)", cursor: "pointer", display: "flex", alignItems: "center" }}>
+                  style={{ background: "#fff", border: "1px solid #E3E5F1", borderRadius: 8, padding: "7px 10px", color: "#596079", cursor: "pointer", display: "flex", alignItems: "center" }}>
                   <Key size={13} />
                 </button>
               )}
@@ -654,31 +866,30 @@ export default function Home() {
       </nav>
 
       {/* MAIN */}
-      <main style={{ position: "relative", zIndex: 10, minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", padding: "80px 24px 40px" }}>
+      <main className="nx-room-main">
         <AnimatePresence mode="wait">
 
           {/* ══ INTERVIEW ════════════════════════════════════════════════════ */}
           {stage === "interview" && (
             <motion.div key="interview"
               initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-              style={{ width: "100%", maxWidth: 1100 }}
               className="interview-grid"
             >
               {/* Chat */}
               <div style={{ ...panel, display: "flex", flexDirection: "column", overflow: "hidden" }}>
                 {/* Header */}
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "14px 20px", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "14px 20px", borderBottom: "1px solid #E3E5F1" }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
                     <InterviewerAvatar persona={persona} isSpeaking={isAiSpeaking} isListening={isRecording} />
                     <div>
-                      <p style={{ fontWeight: 700, fontSize: 13, margin: 0 }}>{persona}</p>
-                      <p style={{ fontSize: 10, color: "rgba(255,255,255,0.3)", margin: 0, letterSpacing: "0.06em", textTransform: "uppercase" }}>{interviewType} · {company}</p>
+                      <p style={{ fontWeight: 700, fontSize: 13, margin: 0, color: "#0E1A3A" }}>{interviewerTitle(company, interviewType)}</p>
+                      <p style={{ fontSize: 10, color: "#596079", margin: 0, letterSpacing: "0.06em", textTransform: "uppercase" }}>{interviewType} · {company === "Agnostic" ? "General" : company} · {toneLabel(persona)}</p>
                     </div>
                   </div>
                   <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-                    <span style={{ fontSize: 10, fontWeight: 700, padding: "4px 12px", borderRadius: 99, border: "1px solid rgba(255,255,255,0.2)", color: "#fff", letterSpacing: "0.06em", textTransform: "uppercase" }}>{currentDifficulty}</span>
+                    <span style={{ fontSize: 10, fontWeight: 700, padding: "4px 12px", borderRadius: 99, border: "1px solid #DCE0FA", background: "#ECEBFE", color: "#4A3DF0", letterSpacing: "0.06em", textTransform: "uppercase" }}>{currentDifficulty}</span>
                     {timerMode !== "Practice Mode" && (
-                      <span className={timeLeft <= 10 ? "timer-urgent" : ""} style={{ fontFamily: "monospace", fontSize: 13, fontWeight: 700, padding: "4px 12px", borderRadius: 8, border: `1px solid ${timeLeft <= 15 ? "rgba(255,255,255,0.6)" : "rgba(255,255,255,0.1)"}`, color: timeLeft <= 15 ? "#fff" : "rgba(255,255,255,0.45)" }}>
+                      <span className={timeLeft <= 10 ? "timer-urgent" : ""} style={{ fontFamily: "monospace", fontSize: 13, fontWeight: 700, padding: "4px 12px", borderRadius: 8, border: `1px solid ${timeLeft <= 15 ? "#E5484D" : "#E3E5F1"}`, color: timeLeft <= 15 ? "#E5484D" : "#36405F", background: "#fff" }}>
                         {Math.floor(timeLeft / 60)}:{String(timeLeft % 60).padStart(2, "0")}
                       </span>
                     )}
@@ -688,14 +899,14 @@ export default function Home() {
                 {/* Messages */}
                 <div style={{ flex: 1, overflowY: "auto", padding: "20px", display: "flex", flexDirection: "column", gap: 16 }}>
                   {chatHistory.map((msg, i) => (
-                    <ChatMessage key={i} msg={msg} isLast={i === chatHistory.length - 1} isTyping={isTyping} />
+                    <ChatMessage key={i} msg={msg} onPlay={speak} />
                   ))}
                   {/* Live streaming bubble */}
                   {streamingText && (
                     <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}
                       style={{ display: "flex", justifyContent: "flex-start" }}>
-                      <div style={{ maxWidth: "82%", borderRadius: "4px 18px 18px 18px", padding: "14px 18px", background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.07)", fontSize: 13, lineHeight: 1.65 }}>
-                        <p style={{ margin: 0, whiteSpace: "pre-wrap", color: "rgba(255,255,255,0.88)" }}>
+                      <div style={{ maxWidth: "88%", borderRadius: "4px 18px 18px 18px", padding: "14px 18px", background: "#EFF0FB", border: "1px solid #DCE0FA", fontSize: 13, lineHeight: 1.65 }}>
+                        <p style={{ margin: 0, whiteSpace: "pre-wrap", color: "#0E1A3A" }}>
                           {streamingText}<span className="cursor-blink">▌</span>
                         </p>
                       </div>
@@ -705,18 +916,17 @@ export default function Home() {
                   {/* Evaluating indicator (only while waiting for eval response, not while streaming) */}
                   {isTyping && !streamingText && (
                     <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 10, background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.07)", borderRadius: "4px 18px 18px 18px", padding: "12px 18px", width: "fit-content" }}>
-                        {[0, 100, 200].map(d => <div key={d} className="bounce-dot" style={{ width: 5, height: d === 100 ? 14 : 8, background: "rgba(255,255,255,0.4)", borderRadius: 3, animationDelay: `${d}ms` }} />)}
-                        <span style={{ fontSize: 10, fontFamily: "monospace", color: "rgba(255,255,255,0.3)", letterSpacing: "0.08em", textTransform: "uppercase", marginLeft: 6 }}>Evaluating</span>
+                      <div style={{ display: "flex", alignItems: "center", gap: 10, background: "#EFF0FB", border: "1px solid #DCE0FA", borderRadius: "4px 18px 18px 18px", padding: "12px 18px", width: "fit-content" }}>
+                        {[0, 100, 200].map(d => <div key={d} className="bounce-dot" style={{ width: 5, height: d === 100 ? 14 : 8, background: "#4A3DF0", borderRadius: 3, animationDelay: `${d}ms` }} />)}
+                        <span style={{ fontSize: 10, fontFamily: "monospace", color: "#596079", letterSpacing: "0.08em", textTransform: "uppercase", marginLeft: 6 }}>Next question</span>
                       </div>
-                      {isAdjusting && <p style={{ fontSize: 10, color: "rgba(255,255,255,0.2)", fontFamily: "monospace", fontStyle: "italic", marginLeft: 12 }}>Adjusting difficulty...</p>}
                     </div>
                   )}
                   <div ref={chatEndRef} />
                 </div>
 
                 {/* Hint bar */}
-                <div style={{ padding: "8px 20px", borderTop: "1px solid rgba(255,255,255,0.04)", fontSize: 10, color: "rgba(255,255,255,0.2)", fontFamily: "monospace", display: "flex", gap: 8, alignItems: "center" }}>
+                <div style={{ padding: "8px 20px", borderTop: "1px solid #E3E5F1", fontSize: 10, color: "#596079", fontFamily: "monospace", display: "flex", gap: 8, alignItems: "center" }}>
                   <Lightbulb size={11} />
                   {interviewType === "Technical" && "FORMAT: 1. Concept  2. Implementation  3. Edge Cases"}
                   {interviewType === "System Design" && "FORMAT: 1. Requirements  2. Architecture  3. Bottlenecks"}
@@ -725,9 +935,9 @@ export default function Home() {
                 </div>
 
                 {/* Input */}
-                <div style={{ padding: "14px 16px", borderTop: "1px solid rgba(255,255,255,0.06)", background: "rgba(0,0,0,0.3)", display: "flex", gap: 10, alignItems: "flex-end" }}>
+                <div style={{ padding: "14px 16px", borderTop: "1px solid #E3E5F1", background: "#FBFAF7", display: "flex", gap: 10, alignItems: "flex-end" }}>
                   {!isCodingRound && (
-                    <button onClick={toggleRecording} style={{ width: 46, height: 46, borderRadius: 12, border: `1px solid ${isRecording ? "rgba(255,255,255,0.4)" : "rgba(255,255,255,0.1)"}`, background: isRecording ? "rgba(255,255,255,0.1)" : "rgba(255,255,255,0.03)", color: isRecording ? "#fff" : "rgba(255,255,255,0.35)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                    <button onClick={toggleRecording} title={isRecording ? "Stop listening" : "Speak your answer"} aria-label={isRecording ? "Stop listening" : "Speak your answer"} style={{ width: 46, height: 46, borderRadius: 12, border: `1px solid ${isRecording ? "#4A3DF0" : "#E3E5F1"}`, background: isRecording ? "#ECEBFE" : "#fff", color: isRecording ? "#4A3DF0" : "#596079", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                       {isRecording ? <Mic size={18} /> : <MicOff size={18} />}
                     </button>
                   )}
@@ -738,13 +948,13 @@ export default function Home() {
                       </div>
                     ) : (
                       <textarea value={answer} onChange={e => setAnswer(e.target.value)}
-                        placeholder={isRecording ? "Listening…" : "Type your answer…"}
+                        placeholder={isRecording ? "Listening… speak now" : "Type, or click the mic to speak"}
                         rows={2}
-                        style={{ width: "100%", background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.09)", borderRadius: 12, padding: "11px 50px 11px 14px", fontSize: 13, color: "#fff", fontFamily: "monospace", outline: "none", resize: "none", boxSizing: "border-box" }} />
+                        style={{ width: "100%", background: "#fff", border: "1px solid #E3E5F1", borderRadius: 12, padding: "11px 50px 11px 14px", fontSize: 13, color: "#0E1A3A", fontFamily: "inherit", outline: "none", resize: "none", boxSizing: "border-box" }} />
                     )}
                     <button onClick={() => submitAnswer()} disabled={!answer.trim() || isTyping}
-                      style={{ position: "absolute", right: 8, bottom: 8, width: 34, height: 34, borderRadius: 8, background: answer.trim() && !isTyping ? "#fff" : "rgba(255,255,255,0.1)", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                      <Zap size={15} color={answer.trim() && !isTyping ? "#000" : "rgba(255,255,255,0.3)"} />
+                      style={{ position: "absolute", right: 8, bottom: 8, width: 34, height: 34, borderRadius: 8, background: answer.trim() && !isTyping ? "#4A3DF0" : "#E3E5F1", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                      <Zap size={15} color={answer.trim() && !isTyping ? "#fff" : "#9AA0B8"} />
                     </button>
                   </div>
                 </div>
@@ -752,27 +962,56 @@ export default function Home() {
 
               {/* Sidebar */}
               <div className="interview-sidebar">
+                <div style={{ ...panel, padding: 12 }}>
+                  <p style={{ ...label, marginBottom: 10, display: "flex", alignItems: "center", gap: 6 }}>
+                    <Video size={12} /> Video Call
+                  </p>
+                  <VideoCallPanel
+                    persona={persona}
+                    isSpeaking={isAiSpeaking}
+                    isListening={isRecording}
+                    label={getCandidateName() || "You"}
+                  />
+                </div>
+                <div style={{ ...panel, padding: 20 }}>
+                  <p style={{ ...label, marginBottom: 10 }}>Voice speed</p>
+                  <div className="nx-speed" role="group" aria-label="Voice speed">
+                    {[1, 1.5, 2].map((rate) => (
+                      <button
+                        key={rate}
+                        type="button"
+                        className={voiceSpeed === rate ? "on" : ""}
+                        onClick={() => {
+                          setVoiceSpeed(rate);
+                          setVoiceSpeedState(rate);
+                        }}
+                      >
+                        {rate}x
+                      </button>
+                    ))}
+                  </div>
+                </div>
                 <div style={{ ...panel, padding: 20 }}>
                   <p style={{ ...label, display: "flex", alignItems: "center", gap: 6, marginBottom: 16 }}><Activity size={12} /> Live Sensors</p>
                   <Meter label="Clarity" value={liveClarity} />
                   <Meter label="Confidence" value={liveConfidence} />
-                  <p style={{ fontSize: 9, color: "rgba(255,255,255,0.15)", textAlign: "center", fontFamily: "monospace", marginTop: 8 }}>Type to activate</p>
+                  <p style={{ fontSize: 9, color: "#9AA0B8", textAlign: "center", fontFamily: "monospace", marginTop: 8 }}>Type to activate</p>
                 </div>
                 <div style={{ ...panel, padding: 20, flex: 1, overflow: "hidden", display: "flex", flexDirection: "column" }}>
                   {weaknesses.length > 0 && (
-                    <div style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 10, padding: "8px 12px", marginBottom: 14, display: "flex", gap: 8, alignItems: "center" }}>
-                      <Brain size={11} color="rgba(255,255,255,0.4)" />
-                      <span style={{ fontSize: 9, color: "rgba(255,255,255,0.35)", fontFamily: "monospace", textTransform: "uppercase", letterSpacing: "0.06em" }}>Recall: {weaknesses[0]?.slice(0, 22)}…</span>
+                    <div style={{ background: "#ECEBFE", border: "1px solid #DCE0FA", borderRadius: 10, padding: "8px 12px", marginBottom: 14, display: "flex", gap: 8, alignItems: "center" }}>
+                      <Brain size={11} color="#4A3DF0" />
+                      <span style={{ fontSize: 9, color: "#4A3DF0", fontFamily: "monospace", textTransform: "uppercase", letterSpacing: "0.06em" }}>Recall: {weaknesses[0]?.slice(0, 22)}…</span>
                     </div>
                   )}
                   <p style={{ ...label, display: "flex", alignItems: "center", gap: 6, marginBottom: 14 }}><Target size={12} /> Neural Profile</p>
                   <div style={{ flex: 1, overflowY: "auto" }}>
-                    <p style={{ fontSize: 9, fontWeight: 700, textTransform: "uppercase", color: "rgba(255,255,255,0.2)", letterSpacing: "0.08em", marginBottom: 8 }}>Weaknesses</p>
-                    {weaknesses.length === 0 ? <p style={{ fontSize: 11, color: "rgba(255,255,255,0.15)", fontStyle: "italic" }}>None yet</p>
-                      : weaknesses.map((w, i) => <p key={i} style={{ fontSize: 11, color: "rgba(255,255,255,0.5)", marginBottom: 4 }}>— {w}</p>)}
-                    <p style={{ fontSize: 9, fontWeight: 700, textTransform: "uppercase", color: "rgba(255,255,255,0.2)", letterSpacing: "0.08em", marginBottom: 8, marginTop: 16 }}>Strengths</p>
-                    {strengths.length === 0 ? <p style={{ fontSize: 11, color: "rgba(255,255,255,0.15)", fontStyle: "italic" }}>None yet</p>
-                      : strengths.map((s, i) => <p key={i} style={{ fontSize: 11, color: "rgba(255,255,255,0.5)", marginBottom: 4 }}>+ {s}</p>)}
+                    <p style={{ fontSize: 9, fontWeight: 700, textTransform: "uppercase", color: "#9AA0B8", letterSpacing: "0.08em", marginBottom: 8 }}>Weaknesses</p>
+                    {weaknesses.length === 0 ? <p style={{ fontSize: 11, color: "#9AA0B8", fontStyle: "italic" }}>None yet</p>
+                      : weaknesses.map((w, i) => <p key={i} style={{ fontSize: 11, color: "#36405F", marginBottom: 4 }}>— {w}</p>)}
+                    <p style={{ fontSize: 9, fontWeight: 700, textTransform: "uppercase", color: "#9AA0B8", letterSpacing: "0.08em", marginBottom: 8, marginTop: 16 }}>Strengths</p>
+                    {strengths.length === 0 ? <p style={{ fontSize: 11, color: "#9AA0B8", fontStyle: "italic" }}>None yet</p>
+                      : strengths.map((s, i) => <p key={i} style={{ fontSize: 11, color: "#36405F", marginBottom: 4 }}>+ {s}</p>)}
                   </div>
                 </div>
               </div>
@@ -787,12 +1026,12 @@ export default function Home() {
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 32 }}>
                   <div>
                     <h2 style={{ fontSize: 26, fontWeight: 900, letterSpacing: "-0.02em", margin: "0 0 4px" }}>Debrief</h2>
-                    <p style={{ fontSize: 11, color: "rgba(255,255,255,0.3)", fontFamily: "monospace", margin: 0 }}>
+                    <p style={{ fontSize: 11, color: "#596079", fontFamily: "monospace", margin: 0 }}>
                       Review each answer before seeing your final score
                     </p>
                   </div>
                   <button onClick={() => setStage("dashboard")}
-                    style={{ padding: "10px 20px", borderRadius: 10, background: "#fff", color: "#000", border: "none", fontWeight: 700, fontSize: 11, letterSpacing: "0.08em", textTransform: "uppercase", cursor: "pointer" }}>
+                    style={{ padding: "10px 20px", borderRadius: 10, background: "#4A3DF0", color: "#fff", border: "none", fontWeight: 600, fontSize: 12, cursor: "pointer" }}>
                     Full Dashboard →
                   </button>
                 </div>
@@ -802,10 +1041,10 @@ export default function Home() {
                     const s = item?.evaluation?.score ?? 0;
                     const col = s >= 7 ? "rgba(100,255,150,0.8)" : s >= 5 ? "rgba(255,200,80,0.8)" : "rgba(255,100,100,0.8)";
                     return (
-                      <div key={idx} style={{ background: "rgba(255,255,255,0.025)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 14, overflow: "hidden" }}>
+                      <div key={idx} style={{ background: "#FBFAF7", border: "1px solid #E3E5F1", borderRadius: 14, overflow: "hidden" }}>
                         {/* Question header */}
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "14px 20px", borderBottom: "1px solid rgba(255,255,255,0.06)", background: "rgba(255,255,255,0.02)" }}>
-                          <span style={{ fontSize: 10, fontWeight: 700, color: "rgba(255,255,255,0.3)", textTransform: "uppercase", letterSpacing: "0.08em" }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "14px 20px", borderBottom: "1px solid #E3E5F1", background: "#fff" }}>
+                          <span style={{ fontSize: 10, fontWeight: 700, color: "#596079", textTransform: "uppercase", letterSpacing: "0.08em" }}>
                             Q{idx + 1} · {item.difficulty || "Medium"}
                           </span>
                           <span style={{ fontFamily: "monospace", fontWeight: 900, fontSize: 16, color: col }}>{s}/10</span>
@@ -813,25 +1052,25 @@ export default function Home() {
 
                         <div style={{ padding: "18px 20px", display: "flex", flexDirection: "column", gap: 14 }}>
                           {/* Question text */}
-                          <p style={{ margin: 0, fontSize: 13, lineHeight: 1.6, color: "rgba(255,255,255,0.85)" }}>
+                          <p style={{ margin: 0, fontSize: 13, lineHeight: 1.6, color: "#0E1A3A" }}>
                             {item.question}
                           </p>
 
                           {/* Score bar */}
-                          <div style={{ width: "100%", height: 2, background: "rgba(255,255,255,0.06)", borderRadius: 99 }}>
+                          <div style={{ width: "100%", height: 2, background: "#ECEBFE", borderRadius: 99 }}>
                             <div style={{ width: `${s * 10}%`, height: "100%", background: col, borderRadius: 99, transition: "width .8s ease" }} />
                           </div>
 
                           {/* Your answer vs ideal */}
                           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-                            <div style={{ background: "rgba(255,255,255,0.03)", borderRadius: 10, padding: "12px 14px" }}>
-                              <p style={{ fontSize: 9, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: "rgba(255,255,255,0.25)", marginBottom: 6 }}>Your Answer</p>
-                              <p style={{ fontSize: 11, color: "rgba(255,255,255,0.5)", lineHeight: 1.6, margin: 0 }}>{item.answer || "—"}</p>
+                            <div style={{ background: "#fff", border: "1px solid #E3E5F1", borderRadius: 10, padding: "12px 14px" }}>
+                              <p style={{ fontSize: 9, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: "#596079", marginBottom: 6 }}>Your Answer</p>
+                              <p style={{ fontSize: 11, color: "#36405F", lineHeight: 1.6, margin: 0 }}>{item.answer || "—"}</p>
                             </div>
                             {item?.evaluation?.ideal_answer && (
                               <div style={{ background: "rgba(100,255,150,0.04)", border: "1px solid rgba(100,255,150,0.12)", borderRadius: 10, padding: "12px 14px" }}>
                                 <p style={{ fontSize: 9, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: "rgba(100,255,150,0.5)", marginBottom: 6 }}>Ideal Answer</p>
-                                <p style={{ fontSize: 11, color: "rgba(255,255,255,0.5)", lineHeight: 1.6, margin: 0 }}>{item.evaluation.ideal_answer}</p>
+                                <p style={{ fontSize: 11, color: "#36405F", lineHeight: 1.6, margin: 0 }}>{item.evaluation.ideal_answer}</p>
                               </div>
                             )}
                           </div>
@@ -850,11 +1089,11 @@ export default function Home() {
 
                 <div style={{ marginTop: 28, display: "flex", gap: 12, justifyContent: "flex-end" }}>
                   <button onClick={() => window.location.reload()}
-                    style={{ padding: "12px 22px", borderRadius: 10, background: "rgba(255,255,255,0.06)", color: "#fff", border: "1px solid rgba(255,255,255,0.12)", fontWeight: 700, fontSize: 11, letterSpacing: "0.08em", textTransform: "uppercase", cursor: "pointer" }}>
+                    style={{ padding: "12px 22px", borderRadius: 10, background: "#fff", color: "#0E1A3A", border: "1px solid #D7D9E6", fontWeight: 600, fontSize: 12, cursor: "pointer" }}>
                     New Simulation
                   </button>
                   <button onClick={() => setStage("dashboard")}
-                    style={{ padding: "12px 22px", borderRadius: 10, background: "#fff", color: "#000", border: "none", fontWeight: 700, fontSize: 11, letterSpacing: "0.08em", textTransform: "uppercase", cursor: "pointer" }}>
+                    style={{ padding: "12px 22px", borderRadius: 10, background: "#4A3DF0", color: "#fff", border: "none", fontWeight: 600, fontSize: 12, cursor: "pointer" }}>
                     View Full Dashboard →
                   </button>
                 </div>
@@ -869,8 +1108,8 @@ export default function Home() {
             return (
               <motion.div key="dashboard" initial={{ opacity: 0, scale: 0.97 }} animate={{ opacity: 1, scale: 1 }}
                 style={{ width: "100%", maxWidth: 900, ...panel, padding: "48px 52px" }}>
-                <h2 style={{ fontSize: 28, fontWeight: 900, letterSpacing: "-0.02em", margin: "0 0 4px" }}>Simulation Report</h2>
-                <p style={{ fontSize: 11, color: "rgba(255,255,255,0.3)", fontFamily: "monospace", margin: "0 0 36px" }}>
+                <h2 style={{ fontSize: 28, fontWeight: 800, letterSpacing: "-0.02em", margin: "0 0 4px", color: "#0E1A3A" }}>Simulation Report</h2>
+                <p style={{ fontSize: 11, color: "#596079", fontFamily: "monospace", margin: "0 0 36px" }}>
                   {company} · {interviewType} · {role}
                 </p>
 
@@ -882,33 +1121,33 @@ export default function Home() {
                     ["Strengths", finalSummary.globalStrengths.length],
                     ["Questions", finalSummary.history.length],
                   ].map(([l, v]) => (
-                    <div key={l} style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 14, padding: "20px 18px", textAlign: "center" }}>
-                      <p style={{ fontSize: 10, color: "rgba(255,255,255,0.3)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 8 }}>{l}</p>
-                      <p style={{ fontSize: 22, fontWeight: 900, margin: 0 }}>{v}</p>
+                    <div key={l} style={{ background: "#FBFAF7", border: "1px solid #E3E5F1", borderRadius: 14, padding: "20px 18px", textAlign: "center" }}>
+                      <p style={{ fontSize: 10, color: "#596079", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 8 }}>{l}</p>
+                      <p style={{ fontSize: 22, fontWeight: 800, margin: 0, color: "#0E1A3A" }}>{v}</p>
                     </div>
                   ))}
                 </div>
 
                 {/* Per-question breakdown */}
                 <div style={{ marginBottom: 28 }}>
-                  <p style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", color: "rgba(255,255,255,0.25)", marginBottom: 14 }}>Question Breakdown</p>
+                  <p style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", color: "#596079", marginBottom: 14 }}>Question Breakdown</p>
                   <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                     {finalSummary.history.map((item, idx) => {
                       const s = item?.evaluation?.score ?? 0;
-                      const barColor = s >= 7 ? "rgba(100,255,150,0.7)" : s >= 5 ? "rgba(255,200,80,0.7)" : "rgba(255,100,100,0.7)";
+                      const barColor = s >= 7 ? "#0B6B60" : s >= 5 ? "#9A4507" : "#9B1C1C";
                       return (
-                        <div key={idx} style={{ background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: 12, padding: "14px 18px" }}>
+                        <div key={idx} style={{ background: "#FBFAF7", border: "1px solid #E3E5F1", borderRadius: 12, padding: "14px 18px" }}>
                           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
-                            <span style={{ fontSize: 11, color: "rgba(255,255,255,0.55)", maxWidth: "80%", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                              Q{idx + 1} · <span style={{ color: "rgba(255,255,255,0.35)", fontStyle: "italic" }}>{item.difficulty || "Medium"}</span> — {item.question}
+                            <span style={{ fontSize: 11, color: "#36405F", maxWidth: "80%", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                              Q{idx + 1} · <span style={{ color: "#9AA0B8", fontStyle: "italic" }}>{item.difficulty || "Medium"}</span> — {item.question}
                             </span>
-                            <span style={{ fontFamily: "monospace", fontWeight: 900, fontSize: 14, color: barColor, whiteSpace: "nowrap", marginLeft: 12 }}>{s}/10</span>
+                            <span style={{ fontFamily: "monospace", fontWeight: 800, fontSize: 14, color: barColor, whiteSpace: "nowrap", marginLeft: 12 }}>{s}/10</span>
                           </div>
-                          <div style={{ width: "100%", height: 2, background: "rgba(255,255,255,0.06)", borderRadius: 99 }}>
+                          <div style={{ width: "100%", height: 2, background: "#ECEBFE", borderRadius: 99 }}>
                             <div style={{ width: `${s * 10}%`, height: "100%", background: barColor, borderRadius: 99, transition: "width .6s" }} />
                           </div>
                           {item?.evaluation?.suggestions && (
-                            <p style={{ margin: "8px 0 0", fontSize: 11, color: "rgba(255,255,255,0.3)", fontStyle: "italic" }}>
+                            <p style={{ margin: "8px 0 0", fontSize: 11, color: "#596079", fontStyle: "italic" }}>
                               💡 {item.evaluation.suggestions}
                             </p>
                           )}
@@ -921,30 +1160,30 @@ export default function Home() {
                 {/* Strengths & Weaknesses */}
                 {(finalSummary.globalStrengths.length > 0 || finalSummary.globalWeaknesses.length > 0) && (
                   <div className="sw-grid" style={{ marginBottom: 28 }}>
-                    <div style={{ background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: 12, padding: "18px 20px" }}>
-                      <p style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", color: "rgba(100,255,150,0.5)", marginBottom: 10 }}>Strengths</p>
+                    <div style={{ background: "#E2F2EE", border: "1px solid #C8E6DE", borderRadius: 12, padding: "18px 20px" }}>
+                      <p style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", color: "#0B6B60", marginBottom: 10 }}>Strengths</p>
                       {finalSummary.globalStrengths.length === 0
-                        ? <p style={{ fontSize: 11, color: "rgba(255,255,255,0.2)", fontStyle: "italic" }}>None detected</p>
-                        : finalSummary.globalStrengths.map((s, i) => <p key={i} style={{ fontSize: 12, color: "rgba(255,255,255,0.55)", margin: "0 0 4px" }}>+ {s}</p>)}
+                        ? <p style={{ fontSize: 11, color: "#9AA0B8", fontStyle: "italic" }}>None detected</p>
+                        : finalSummary.globalStrengths.map((s, i) => <p key={i} style={{ fontSize: 12, color: "#36405F", margin: "0 0 4px" }}>+ {s}</p>)}
                     </div>
-                    <div style={{ background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: 12, padding: "18px 20px" }}>
-                      <p style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", color: "rgba(255,200,80,0.5)", marginBottom: 10 }}>Areas to Improve</p>
+                    <div style={{ background: "#FCEEDD", border: "1px solid #F4D7B5", borderRadius: 12, padding: "18px 20px" }}>
+                      <p style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", color: "#9A4507", marginBottom: 10 }}>Areas to Improve</p>
                       {finalSummary.globalWeaknesses.length === 0
-                        ? <p style={{ fontSize: 11, color: "rgba(255,255,255,0.2)", fontStyle: "italic" }}>None detected</p>
-                        : finalSummary.globalWeaknesses.map((w, i) => <p key={i} style={{ fontSize: 12, color: "rgba(255,255,255,0.55)", margin: "0 0 4px" }}>— {w}</p>)}
+                        ? <p style={{ fontSize: 11, color: "#9AA0B8", fontStyle: "italic" }}>None detected</p>
+                        : finalSummary.globalWeaknesses.map((w, i) => <p key={i} style={{ fontSize: 12, color: "#36405F", margin: "0 0 4px" }}>— {w}</p>)}
                     </div>
                   </div>
                 )}
 
                 {/* Actions */}
                 <div className="dashboard-actions">
-                  <button onClick={downloadReport} style={{ padding: 14, borderRadius: 12, background: "rgba(255,255,255,0.06)", color: "#fff", fontWeight: 700, fontSize: 11, letterSpacing: "0.08em", textTransform: "uppercase", border: "1px solid rgba(255,255,255,0.12)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
+                  <button onClick={downloadReport} style={{ padding: 14, borderRadius: 12, background: "#fff", color: "#0E1A3A", fontWeight: 600, fontSize: 13, border: "1px solid #D7D9E6", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
                     <Download size={13} /> PDF Report
                   </button>
-                  <button onClick={() => window.location.href = "/profile"} style={{ padding: 14, borderRadius: 12, background: "rgba(255,255,255,0.06)", color: "#fff", fontWeight: 700, fontSize: 11, letterSpacing: "0.08em", textTransform: "uppercase", border: "1px solid rgba(255,255,255,0.12)", cursor: "pointer" }}>
+                  <button onClick={() => window.location.href = "/profile"} style={{ padding: 14, borderRadius: 12, background: "#fff", color: "#0E1A3A", fontWeight: 600, fontSize: 13, border: "1px solid #D7D9E6", cursor: "pointer" }}>
                     View History →
                   </button>
-                  <button onClick={() => window.location.reload()} style={{ padding: 14, borderRadius: 12, background: "#fff", color: "#000", fontWeight: 700, fontSize: 11, letterSpacing: "0.08em", textTransform: "uppercase", border: "none", cursor: "pointer" }}>
+                  <button onClick={() => window.location.reload()} style={{ padding: 14, borderRadius: 12, background: "#4A3DF0", color: "#fff", fontWeight: 600, fontSize: 13, border: "none", cursor: "pointer" }}>
                     New Simulation
                   </button>
                 </div>
@@ -957,83 +1196,7 @@ export default function Home() {
 
       <style>{`
         @keyframes spin { to { transform: rotate(360deg); } }
-        .bounce-dot { animation: bounce 0.6s ease-in-out infinite alternate; }
-        @keyframes bounce { from { transform: scaleY(0.5); } to { transform: scaleY(1.2); } }
-        @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
-        .cursor-blink { animation: blink 0.75s ease-in-out infinite; }
-        @keyframes timerPulse { 0%,100%{box-shadow:0 0 0 0 rgba(255,80,80,0)} 50%{box-shadow:0 0 0 4px rgba(255,80,80,0.35)} }
-        .timer-urgent { animation: timerPulse 0.6s ease-in-out infinite; border-color: rgba(255,80,80,0.6) !important; color: rgba(255,120,120,1) !important; }
-
-        .nav-txt-btn {
-          font-size: 11px; color: rgba(255,255,255,0.45);
-          font-family: monospace; letter-spacing: 0.05em;
-          background: none; border: none; cursor: pointer;
-        }
-
-        .feature-grid {
-          display: grid;
-          grid-template-columns: repeat(4, 1fr);
-          gap: 14px;
-        }
-
-        .interview-grid {
-          display: grid;
-          grid-template-columns: 1fr 280px;
-          gap: 16px;
-          height: 82vh;
-        }
-
-        .interview-sidebar {
-          display: flex;
-          flex-direction: column;
-          gap: 14px;
-        }
-
-        .dashboard-stats {
-          display: grid;
-          grid-template-columns: repeat(4, 1fr);
-          gap: 14px;
-          margin-bottom: 32px;
-        }
-
-        .sw-grid {
-          display: grid;
-          grid-template-columns: 1fr 1fr;
-          gap: 16px;
-        }
-
-        .dashboard-actions {
-          display: grid;
-          grid-template-columns: 1fr 1fr 1fr;
-          gap: 12px;
-        }
-
-        /* ── Tablet ── */
-        @media (max-width: 960px) {
-          .interview-grid { grid-template-columns: 1fr; height: auto; min-height: 90vh; }
-          .interview-sidebar { flex-direction: row; overflow-x: auto; padding-bottom: 4px; }
-          .interview-sidebar > div { min-width: 180px; flex-shrink: 0; }
-          .feature-grid { grid-template-columns: repeat(2, 1fr); }
-        }
-
-        /* ── Mobile ── */
-        @media (max-width: 640px) {
-          .nav-txt-btn { display: none; }
-          .dashboard-stats { grid-template-columns: repeat(2, 1fr); }
-          .sw-grid { grid-template-columns: 1fr; }
-          .dashboard-actions { grid-template-columns: 1fr; }
-          .company-grid { grid-template-columns: repeat(4, 1fr) !important; }
-          .feature-grid { grid-template-columns: 1fr; }
-        }
-
-        @media (max-width: 420px) {
-          .company-grid { grid-template-columns: repeat(2, 1fr) !important; }
-          .dashboard-stats { grid-template-columns: 1fr 1fr; }
-        }
-
-        select option { background: #111; }
-        textarea::placeholder, input::placeholder { color: rgba(255,255,255,0.2); }
-        * { box-sizing: border-box; }
+        .nx-room textarea::placeholder, .nx-room input::placeholder { color: #9AA0B8; }
       `}</style>
     </div>
       )}

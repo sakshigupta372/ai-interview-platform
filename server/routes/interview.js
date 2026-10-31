@@ -4,6 +4,7 @@ const router = express.Router();
 const { generateQuestion, streamQuestionChunks, hasUsableApiKey, mapGeminiError } = require("../ai/llm");
 const { evaluateAnswer } = require("../ai/evaluate");
 const { generateFollowUp, streamFollowUpChunks } = require("../ai/followUp");
+const { synthesizeSpeech } = require("../ai/tts");
 const sessionService = require("../services/session");
 
 const MAX_QUESTIONS = 5;
@@ -20,12 +21,28 @@ function sseWrite(res, data) {
   res.write(`data: ${JSON.stringify(data)}\n\n`);
 }
 
+router.post("/speak", async (req, res) => {
+  const { text, language } = req.body || {};
+  const raw = String(text || "").replace(/\s+/g, " ").trim();
+  if (!raw) return res.status(400).json({ error: "text required" });
+  try {
+    const buf = await synthesizeSpeech(raw, language || "English");
+    res.setHeader("Content-Type", "audio/mpeg");
+    res.setHeader("Cache-Control", "no-store");
+    res.send(buf);
+  } catch (error) {
+    console.error("speak error:", error.message);
+    res.status(502).json({ error: "Voice synthesis failed" });
+  }
+});
+
 // 1. START — streaming version (creates session + streams opening question)
 router.post("/stream-start", async (req, res) => {
   const { role, clerkId, userApiKey, resumeContext, isCodingRound, candidateName, drillFocus, language } = req.body;
   if (!role) return res.status(400).json({ error: "Role is required" });
   if (!hasUsableApiKey(userApiKey)) return res.status(400).json({ error: "Gemini API key required." });
 
+  console.log("stream-start", { role: String(role).slice(0, 80), coding: !!isCodingRound, hasKey: Boolean(userApiKey) });
   sseSetup(res);
 
   try {

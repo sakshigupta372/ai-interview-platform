@@ -5,14 +5,11 @@ import { Brain, Rocket, Loader2, ShieldAlert, KeyRound } from "lucide-react";
 import { SignInButton, UserButton } from "@clerk/nextjs";
 import { ALL_COMPANIES } from "@/lib/companies";
 import { saveGeminiKey } from "@/lib/brand";
+import { TONES } from "@/lib/persona";
+import { unlockSpeech, primeInterviewerVoice, warmupAcks } from "@/lib/tts";
 import "@/app/setup.css";
 
 const TYPES = ["Technical", "HR & Culture", "System Design", "Coding Round"];
-const TONES = [
-  ["Harsh Tech Lead", "Strict & direct"],
-  ["Friendly Microsoft HR", "Warm & structured"],
-  ["Chaotic Startup Founder", "Fast & casual"],
-];
 const TIMERS = [
   ["Practice Mode", "No timer"],
   ["Pressure Mode", "2 min / Q"],
@@ -44,11 +41,11 @@ function ShapeGrid() {
           const dx = mouse.current.x - cx, dy = mouse.current.y - cy;
           const dist = Math.sqrt(dx * dx + dy * dy);
           const inf = Math.max(0, 1 - dist / 140);
-          const a = 0.055 + inf * 0.35;
+          const a = 0.045 + inf * 0.22;
           const s = (cell * 0.3) * (1 + inf * 0.5);
           ctx.save(); ctx.translate(cx, cy);
           ctx.globalAlpha = a;
-          ctx.fillStyle = "#fff";
+          ctx.fillStyle = "#4A3DF0";
           const t = (r + cl) % 3;
           if (t === 0) ctx.fillRect(-s / 2, -s / 2, s, s);
           else if (t === 1) { ctx.beginPath(); ctx.arc(0, 0, s / 2, 0, Math.PI * 2); ctx.fill(); }
@@ -91,6 +88,8 @@ export default function SetupEngine({
   apiKeyError, setApiKeyError,
   onNeedKey,
   onKeySaved,
+  startError,
+  language, setLanguage,
 }) {
   const submitKey = () => {
     if (apiKeyInput.trim().length < 10) {
@@ -111,6 +110,9 @@ export default function SetupEngine({
       return;
     }
     if (!role.trim()) return;
+    unlockSpeech();
+    primeInterviewerVoice(language);
+    warmupAcks(language);
     onStart();
   };
 
@@ -119,12 +121,17 @@ export default function SetupEngine({
       <ShapeGrid />
       <header className="nx-setup-nav">
         <button type="button" className="nx-setup-logo" onClick={onBack} aria-label="Back to home">
-          NEXUS<span>.AI</span>
+          <svg width="30" height="30" viewBox="0 0 30 30" aria-hidden="true">
+            <rect x="1" y="1" width="28" height="28" rx="9" fill="#0E1A3A" />
+            <path d="M10 20.5V9.5l10 11V9.5" stroke="#fff" strokeWidth="2.4" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+            <circle cx="20" cy="9.5" r="2.6" fill="#4A3DF0" stroke="#fff" strokeWidth="1.2" />
+          </svg>
+          <span>NEXUS<b>.AI</b></span>
         </button>
         <div>
           {isLoaded && !userId && (
             <SignInButton mode="modal">
-              <button type="button" className="nx-setup-signin">Sign In</button>
+              <button type="button" className="nx-setup-signin">Log in</button>
             </SignInButton>
           )}
           {isLoaded && userId && <UserButton />}
@@ -132,6 +139,13 @@ export default function SetupEngine({
       </header>
 
       <main className="nx-setup-main">
+        <div className="nx-pipe" aria-label="Setup steps">
+          <div className="on"><span>1</span>Configure</div>
+          <i aria-hidden="true" />
+          <div><span>2</span>Simulate</div>
+          <i aria-hidden="true" />
+          <div><span>3</span>Debrief</div>
+        </div>
         {stage === "api-key" ? (
           <div className="nx-engine">
             <div className="nx-engine-icon"><KeyRound size={22} /></div>
@@ -147,7 +161,7 @@ export default function SetupEngine({
               autoFocus
               style={{ textAlign: "center", fontFamily: "ui-monospace, monospace", letterSpacing: "0.04em" }}
             />
-            {apiKeyError && <p className="nx-engine-note" style={{ color: "rgba(255,80,80,0.85)", marginTop: 0, marginBottom: 10 }}>{apiKeyError}</p>}
+            {apiKeyError && <p className="nx-engine-error">{apiKeyError}</p>}
             <button type="button" className="nx-start" disabled={apiKeyInput.trim().length < 10} onClick={submitKey}>
               Activate Engine
             </button>
@@ -163,7 +177,7 @@ export default function SetupEngine({
           <div className="nx-engine">
             <div className="nx-engine-icon"><Brain size={22} strokeWidth={1.7} /></div>
             <h1>Agentic Engine</h1>
-            <p className="sub">Multi-Agent Interview Simulation Pipeline</p>
+            <p className="sub">Pick the round, company, and role — then start the simulation.</p>
 
             {drillMode && (
               <div className="nx-drill">
@@ -174,6 +188,21 @@ export default function SetupEngine({
                 <button type="button" onClick={() => setDrillMode(null)} aria-label="Clear drill">✕</button>
               </div>
             )}
+
+            <div className="nx-langs" role="tablist" aria-label="Interview language">
+              {["English", "Hindi", "Hinglish"].map((lang) => (
+                <button
+                  key={lang}
+                  type="button"
+                  role="tab"
+                  className={language === lang ? "on" : ""}
+                  aria-selected={language === lang}
+                  onClick={() => setLanguage(lang)}
+                >
+                  {lang}
+                </button>
+              ))}
+            </div>
 
             <div className="nx-types" role="tablist" aria-label="Interview type">
               {TYPES.map((t) => (
@@ -197,8 +226,8 @@ export default function SetupEngine({
                 ))}
               </select>
               <select className="nx-select" value={persona} onChange={(e) => setPersona(e.target.value)} aria-label="Tone">
-                {TONES.map(([v, l]) => (
-                  <option key={v} value={v}>{v === "Harsh Tech Lead" ? "Tone" : l}</option>
+                {TONES.map((t) => (
+                  <option key={t.id} value={t.id}>{t.label}</option>
                 ))}
               </select>
               <select className="nx-select" value={timerMode} onChange={(e) => setTimerMode(e.target.value)} aria-label="Timer">
@@ -216,6 +245,8 @@ export default function SetupEngine({
               onKeyDown={(e) => e.key === "Enter" && handleStart()}
               placeholder="Enter job target e.g. Senior Frontend Dev"
             />
+
+            {startError && <p className="nx-engine-error" role="alert">{startError}</p>}
 
             {!isLoaded ? (
               <button type="button" className="nx-start" disabled>Start Simulation</button>

@@ -65,7 +65,7 @@ export default function InterviewerAvatar({ persona, isSpeaking, isListening, si
             position: "absolute", bottom: 0, right: 0,
             width: size * 0.28, height: size * 0.28,
             borderRadius: "50%", background: "#22c55e",
-            border: `2px solid #050505`,
+            border: `2px solid #FFFFFF`,
           }}
         />
       )}
