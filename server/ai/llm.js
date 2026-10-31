@@ -39,10 +39,47 @@ function hasUsableApiKey(userApiKey) {
   return (userKey && userKey.length > 10) || (platformKey && platformKey.length > 10);
 }
 
+const GEMINI_MODELS = [
+  "gemini-2.5-flash",
+  "gemini-3.5-flash-lite",
+  "gemini-3.1-flash-lite",
+  "gemini-3.6-flash",
+  "gemini-3.8-flash",
+];
+
+function isRetryableGeminiError(error) {
+  const msg = error?.message || String(error);
+  const status = error?.status;
+  return status === 503
+    || status === 429
+    || status === 404
+    || /UNAVAILABLE|high demand|overloaded|try again later|quota|rate limit|NOT_FOUND|not found/i.test(msg);
+}
+
+async function generateContentWithFallback(client, contents, { stream = false } = {}) {
+  let lastError;
+  for (const model of GEMINI_MODELS) {
+    try {
+      if (stream) {
+        return await client.models.generateContentStream({ model, contents });
+      }
+      return await client.models.generateContent({ model, contents });
+    } catch (error) {
+      lastError = error;
+      if (!isRetryableGeminiError(error)) throw error;
+      console.warn(`Gemini ${model} unavailable (${error.status || "error"}). Trying next model…`);
+    }
+  }
+  throw lastError;
+}
+
 function mapGeminiError(error) {
   const msg = error?.message || String(error);
   if (error?.status === 400 && /API key/i.test(msg)) {
     return { status: 401, error: "Invalid Gemini API key. Get a fresh key at aistudio.google.com/apikey" };
+  }
+  if (error?.status === 503 || /UNAVAILABLE|high demand|overloaded/i.test(msg)) {
+    return { status: 503, error: "Gemini is busy right now. Wait a few seconds and try Start Simulation again." };
   }
   if (error?.status === 429 || /quota|rate limit/i.test(msg)) {
     return { status: 429, error: "Gemini rate limit hit. Wait a minute and try again." };
@@ -87,10 +124,7 @@ Rules:
 
   try {
     const client = getAI(userApiKey);
-    const response = await client.models.generateContent({
-      model: "gemini-2.5-flash",
-      contents: prompt,
-    });
+    const response = await generateContentWithFallback(client, prompt);
     const firstName = getFirstName(resumeContext, candidateName);
     const text = extractResponseText(response);
     if (!text) throw new Error("Gemini returned an empty response");
@@ -151,10 +185,7 @@ async function* streamQuestionChunks(role, userApiKey, resumeContext = null, isC
   const prompt = buildQuestionPrompt(role, resumeContext, isCodingRound, candidateName, drillFocus, language);
   const firstName = getFirstName(resumeContext, candidateName);
   const client = getAI(userApiKey);
-  const stream = await client.models.generateContentStream({
-    model: "gemini-2.5-flash",
-    contents: prompt,
-  });
+  const stream = await generateContentWithFallback(client, prompt, { stream: true });
   for await (const chunk of stream) {
     const raw = typeof chunk.text === "function" ? chunk.text() : (chunk.text || "");
     if (raw) yield stripNamePlaceholders(raw, firstName);
@@ -173,4 +204,5 @@ module.exports = {
   extractResponseText,
   hasUsableApiKey,
   mapGeminiError,
+  generateContentWithFallback,
 };

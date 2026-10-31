@@ -1,4 +1,4 @@
-const { getAI, extractResponseText } = require("./llm");
+const { getAI, extractResponseText, generateContentWithFallback } = require("./llm");
 
 async function extractResumeContext(resumeText, userApiKey = null) {
   const prompt = `Extract key professional information from this resume for interview preparation.
@@ -20,10 +20,7 @@ Return ONLY a valid JSON object, no markdown, no extra text:
 
   try {
     const client = getAI(userApiKey);
-    const response = await client.models.generateContent({
-      model: "gemini-2.5-flash",
-      contents: prompt,
-    });
+    const response = await generateContentWithFallback(client, prompt);
     let text = extractResponseText(response);
     const first = text.indexOf("{");
     const last = text.lastIndexOf("}");

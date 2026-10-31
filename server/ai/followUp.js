@@ -1,4 +1,4 @@
-const { getAI, getFirstName, stripNamePlaceholders, extractResponseText, getLangInstruction } = require("./llm");
+const { getAI, getFirstName, stripNamePlaceholders, extractResponseText, getLangInstruction, generateContentWithFallback } = require("./llm");
 
 async function generateFollowUp(role, previousQuestion, userAnswer, evaluationScore, difficulty, userApiKey = null, isCodingRound = false, resumeContext = null, candidateName = null) {
   const firstName = getFirstName(resumeContext, candidateName);
@@ -40,10 +40,7 @@ ${firstName ? `- You may use the candidate's first name (${firstName}) naturally
 
   try {
     const client = getAI(userApiKey);
-    const response = await client.models.generateContent({
-      model: "gemini-2.5-flash",
-      contents: prompt,
-    });
+    const response = await generateContentWithFallback(client, prompt);
     
     const text = extractResponseText(response);
     if (!text) throw new Error("Gemini returned an empty response");
@@ -81,26 +78,23 @@ What just happened:
 - Internal score: ${evaluationScore}/10
 - Next difficulty: ${difficulty}
 
-React briefly (1 sentence MAX), then ask the next question. Be a real person — not a cheerleader.
+Reply in under 35 words. One short reaction, then ONE question. No preamble.
 
 HARD RULES:
 - NEVER say: "Great answer!", "Excellent!", "That's impressive!", "Perfect!", "Absolutely!", "Of course!", "Certainly!"
-- Score 7+: terse acknowledgement only ("Yeah, solid." / "Mm-hmm, makes sense." / "Got it.") then move on
-- Score 4-6: neutral, no judgment ("Okay." / "Right, let's try something else." / "Alright, moving on.")
-- Score <4: be human, not harsh ("No worries." / "Let's try a different angle." / "Okay, let's step back a bit.")
-- ONE question, match the ${difficulty} difficulty level
-- Output ONLY the reaction + question — nothing else
-${firstName ? `- Use "${firstName}" naturally if it flows — never [Candidate Name]` : "- Skip the name — no placeholders"}`;
+- Score 7+: "Got it." / "Yeah." then the next question
+- Score 4-6: "Okay." then the next question
+- Score <4: "Let's try another angle." then a simpler question
+- Match ${difficulty} difficulty
+- Output ONLY the spoken line — nothing else
+${firstName ? `- Use "${firstName}" only if it fits — never [Candidate Name]` : "- Skip the name — no placeholders"}`;
 }
 
 async function* streamFollowUpChunks(role, previousQuestion, userAnswer, evaluationScore, difficulty, userApiKey = null, isCodingRound = false, resumeContext = null, candidateName = null, language = "English") {
   const firstName = getFirstName(resumeContext, candidateName);
   const prompt = buildFollowUpPrompt(role, previousQuestion, userAnswer, evaluationScore, difficulty, isCodingRound, firstName, language);
   const client = getAI(userApiKey);
-  const stream = await client.models.generateContentStream({
-    model: "gemini-2.5-flash",
-    contents: prompt,
-  });
+  const stream = await generateContentWithFallback(client, prompt, { stream: true });
   for await (const chunk of stream) {
     const raw = typeof chunk.text === "function" ? chunk.text() : (chunk.text || "");
     if (raw) yield stripNamePlaceholders(raw, firstName);

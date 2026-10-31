@@ -1,4 +1,4 @@
-const { getAI, extractResponseText, getLangInstruction } = require("./llm");
+const { getAI, extractResponseText, getLangInstruction, generateContentWithFallback } = require("./llm");
 
 // Helper: sleep for ms milliseconds
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -55,10 +55,7 @@ Return ONLY valid JSON. No markdown, no extra text.
   for (let attempt = 1; attempt <= 3; attempt++) {
     try {
       const client = getAI(userApiKey);
-      const response = await client.models.generateContent({
-        model: "gemini-2.5-flash",
-        contents: prompt,
-      });
+      const response = await generateContentWithFallback(client, prompt);
 
       let textData = extractResponseText(response);
 
