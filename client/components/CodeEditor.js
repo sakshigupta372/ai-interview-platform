@@ -12,19 +12,19 @@ export default function CodeEditor({ value, onChange, language, onLanguageChange
         <select
           value={language}
           onChange={e => onLanguageChange(e.target.value)}
-          style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 8, padding: "5px 10px", fontSize: 11, color: "#fff", outline: "none", cursor: "pointer" }}
+          style={{ background: "#FBFAF7", border: "1px solid #E3E5F1", borderRadius: 8, padding: "5px 10px", fontSize: 11, color: "#0E1A3A", outline: "none", cursor: "pointer" }}
         >
-          {LANGUAGES.map(l => <option key={l} value={l} style={{ background: "#1e1e1e" }}>{l}</option>)}
+          {LANGUAGES.map(l => <option key={l} value={l} style={{ background: "#fff" }}>{l}</option>)}
         </select>
-        <span style={{ fontSize: 10, color: "rgba(255,255,255,0.25)", fontFamily: "monospace", letterSpacing: "0.06em", textTransform: "uppercase" }}>
+        <span style={{ fontSize: 10, color: "#596079", fontFamily: "monospace", letterSpacing: "0.06em", textTransform: "uppercase" }}>
           ⟩_ Coding Mode
         </span>
       </div>
-      <div style={{ borderRadius: 12, overflow: "hidden", border: "1px solid rgba(255,255,255,0.09)", minHeight: 200 }}>
+      <div style={{ borderRadius: 12, overflow: "hidden", border: "1px solid #E3E5F1", minHeight: 260 }}>
         <MonacoEditor
-          height="200px"
+          height="260px"
           language={language}
-          theme="vs-dark"
+          theme="vs"
           value={value}
           onChange={v => onChange(v || "")}
           options={{
