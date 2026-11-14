@@ -10,12 +10,29 @@ import { toast } from "@/lib/toast";
 import { motion, AnimatePresence } from "framer-motion";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, BarChart, Bar, CartesianGrid } from "recharts";
 
-const panel = { background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 20, backdropFilter: "blur(20px)" };
+// ─── Cream theme tokens (match the interview room) ───────────────────────────
+const INK = "#0E1A3A";
+const INK2 = "#36405F";
+const MUTED = "#596079";
+const LINE = "#E3E5F1";
+const BG = "#FBFAF7";
+const PAPER = "#FFFFFF";
+const ACCENT = "#4A3DF0";
+const ACCENT_BG = "#ECEBFE";
+const ACCENT_LINE = "#DCE0FA";
+const GOOD = "#0B6B60";
+const WARN = "#B4690E";
+const BAD = "#C62A2F";
+
+const panel = { background: PAPER, border: `1px solid ${LINE}`, borderRadius: 20, boxShadow: "0 1px 2px rgba(14,26,58,.04), 0 18px 40px -22px rgba(14,26,58,.28)" };
+
+function scoreColor(score) {
+  return score >= 7 ? GOOD : score >= 5 ? WARN : BAD;
+}
 
 function ScoreChip({ score }) {
-  const color = score >= 7 ? "rgba(100,255,150,0.85)" : score >= 5 ? "rgba(255,200,80,0.85)" : "rgba(255,100,100,0.8)";
   return (
-    <span style={{ fontFamily: "monospace", fontWeight: 900, fontSize: 13, color, minWidth: 32, display: "inline-block" }}>
+    <span style={{ fontFamily: "monospace", fontWeight: 900, fontSize: 13, color: scoreColor(score), minWidth: 32, display: "inline-block" }}>
       {score}/10
     </span>
   );
@@ -23,45 +40,45 @@ function ScoreChip({ score }) {
 
 function ChatTranscript({ session }) {
   return (
-    <div style={{ marginTop: 20, borderTop: "1px solid rgba(255,255,255,0.07)", paddingTop: 20 }}>
-      <p style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", color: "rgba(255,255,255,0.25)", marginBottom: 16 }}>
+    <div style={{ marginTop: 20, borderTop: `1px solid ${LINE}`, paddingTop: 20 }}>
+      <p style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", color: MUTED, marginBottom: 16 }}>
         Full Conversation
       </p>
       <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
         {(session.history || []).map((entry, i) => (
           <div key={i} style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             {/* Question number */}
-            <p style={{ fontSize: 9, fontWeight: 700, textTransform: "uppercase", color: "rgba(255,255,255,0.2)", letterSpacing: "0.1em", margin: 0 }}>
+            <p style={{ fontSize: 9, fontWeight: 700, textTransform: "uppercase", color: MUTED, letterSpacing: "0.1em", margin: 0 }}>
               Q{i + 1} · {entry.difficulty || "Medium"}
             </p>
 
             {/* AI question bubble */}
             <div style={{ display: "flex", justifyContent: "flex-start" }}>
-              <div style={{ maxWidth: "85%", background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: "4px 16px 16px 16px", padding: "12px 16px", fontSize: 13, lineHeight: 1.6, color: "rgba(255,255,255,0.85)" }}>
+              <div style={{ maxWidth: "85%", background: ACCENT_BG, border: `1px solid ${ACCENT_LINE}`, borderRadius: "4px 16px 16px 16px", padding: "12px 16px", fontSize: 13, lineHeight: 1.6, color: INK }}>
                 {entry.question}
               </div>
             </div>
 
             {/* User answer bubble */}
             <div style={{ display: "flex", justifyContent: "flex-end" }}>
-              <div style={{ maxWidth: "85%", background: "rgba(255,255,255,0.07)", border: "1px solid rgba(255,255,255,0.12)", borderRadius: "16px 4px 16px 16px", padding: "12px 16px", fontSize: 13, lineHeight: 1.6, color: "rgba(255,255,255,0.75)" }}>
+              <div style={{ maxWidth: "85%", background: PAPER, border: `1px solid ${LINE}`, borderRadius: "16px 4px 16px 16px", padding: "12px 16px", fontSize: 13, lineHeight: 1.6, color: INK2 }}>
                 {entry.answer}
               </div>
             </div>
 
             {/* Evaluation row */}
             {entry.evaluation && (
-              <div style={{ background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.05)", borderRadius: 12, padding: "12px 14px", fontSize: 12 }}>
+              <div style={{ background: BG, border: `1px solid ${LINE}`, borderRadius: 12, padding: "12px 14px", fontSize: 12 }}>
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
-                  <span style={{ fontSize: 10, color: "rgba(255,255,255,0.3)", textTransform: "uppercase", letterSpacing: "0.08em" }}>Evaluation</span>
+                  <span style={{ fontSize: 10, color: MUTED, textTransform: "uppercase", letterSpacing: "0.08em" }}>Evaluation</span>
                   <ScoreChip score={entry.evaluation.score} />
                 </div>
                 {/* Score bar */}
-                <div style={{ width: "100%", height: 2, background: "rgba(255,255,255,0.07)", borderRadius: 99, marginBottom: 10 }}>
-                  <div style={{ width: `${entry.evaluation.score * 10}%`, height: "100%", background: entry.evaluation.score >= 7 ? "rgba(100,255,150,0.7)" : entry.evaluation.score >= 5 ? "rgba(255,200,80,0.7)" : "rgba(255,100,100,0.7)", borderRadius: 99 }} />
+                <div style={{ width: "100%", height: 2, background: "#ECEBFE", borderRadius: 99, marginBottom: 10 }}>
+                  <div style={{ width: `${entry.evaluation.score * 10}%`, height: "100%", background: scoreColor(entry.evaluation.score), borderRadius: 99 }} />
                 </div>
                 {entry.evaluation.suggestions && (
-                  <p style={{ margin: 0, color: "rgba(255,255,255,0.4)", lineHeight: 1.5, fontStyle: "italic" }}>
+                  <p style={{ margin: 0, color: MUTED, lineHeight: 1.5, fontStyle: "italic" }}>
                     💡 {entry.evaluation.suggestions}
                   </p>
                 )}
@@ -75,6 +92,7 @@ function ChatTranscript({ session }) {
 }
 
 function SessionCard({ session, index, onDelete }) {
+  const { getToken } = useAuth();
   const [open, setOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const sessionScores = (session.history || []).map(h => h?.evaluation?.score ?? 0);
@@ -85,7 +103,10 @@ function SessionCard({ session, index, onDelete }) {
     if (!confirm("Delete this session? This can't be undone.")) return;
     setDeleting(true);
     try {
-      await axios.delete(`${getApiBase()}/interview/session/${session.sessionId}`);
+      const token = await getToken();
+      await axios.delete(`${getApiBase()}/interview/session/${session.sessionId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
       onDelete(session.sessionId);
       toast.success("Session deleted.");
     } catch {
@@ -103,50 +124,50 @@ function SessionCard({ session, index, onDelete }) {
     >
       {/* Difficulty badge + delete */}
       <div style={{ position: "absolute", top: 14, right: 14, display: "flex", alignItems: "center", gap: 8 }}>
-        <span style={{ fontSize: 9, fontWeight: 700, padding: "3px 10px", borderRadius: 99, border: "1px solid rgba(255,255,255,0.15)", color: "rgba(255,255,255,0.5)", textTransform: "uppercase", letterSpacing: "0.08em" }}>
+        <span style={{ fontSize: 9, fontWeight: 700, padding: "3px 10px", borderRadius: 99, border: `1px solid ${ACCENT_LINE}`, background: ACCENT_BG, color: ACCENT, textTransform: "uppercase", letterSpacing: "0.08em" }}>
           {session.currentDifficulty || "—"}
         </span>
         <button onClick={handleDelete} disabled={deleting} title="Delete session"
-          style={{ background: "none", border: "none", cursor: "pointer", color: "rgba(255,255,255,0.2)", padding: 2, display: "flex", alignItems: "center" }}
-          onMouseEnter={e => e.currentTarget.style.color = "rgba(255,100,100,0.7)"}
-          onMouseLeave={e => e.currentTarget.style.color = "rgba(255,255,255,0.2)"}>
+          style={{ background: "none", border: "none", cursor: "pointer", color: "#9AA0B8", padding: 2, display: "flex", alignItems: "center" }}
+          onMouseEnter={e => e.currentTarget.style.color = BAD}
+          onMouseLeave={e => e.currentTarget.style.color = "#9AA0B8"}>
           <Trash2 size={13} />
         </button>
       </div>
 
-      <h4 style={{ fontSize: 13, fontWeight: 700, margin: "0 0 4px", maxWidth: "78%", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{session.role}</h4>
-      <p style={{ fontSize: 10, color: "rgba(255,255,255,0.25)", fontFamily: "monospace", margin: "0 0 16px" }}>
+      <h4 style={{ fontSize: 13, fontWeight: 700, margin: "0 0 4px", color: INK, maxWidth: "78%", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{session.role}</h4>
+      <p style={{ fontSize: 10, color: MUTED, fontFamily: "monospace", margin: "0 0 16px" }}>
         {session.createdAt ? new Date(session.createdAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : "—"} · {(session.history || []).length} questions
       </p>
 
       {/* Strengths / Weaknesses */}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 14 }}>
         <div>
-          <p style={{ fontSize: 9, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: "rgba(255,255,255,0.22)", marginBottom: 6 }}>Weaknesses</p>
+          <p style={{ fontSize: 9, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: MUTED, marginBottom: 6 }}>Weaknesses</p>
           {(session.globalWeaknesses || []).length === 0
-            ? <p style={{ fontSize: 11, color: "rgba(255,255,255,0.15)", fontStyle: "italic" }}>None</p>
+            ? <p style={{ fontSize: 11, color: "#9AA0B8", fontStyle: "italic" }}>None</p>
             : (session.globalWeaknesses || []).slice(0, 2).map((w, idx) => (
-              <p key={idx} style={{ fontSize: 11, color: "rgba(255,255,255,0.45)", margin: "0 0 3px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>— {w}</p>
+              <p key={idx} style={{ fontSize: 11, color: INK2, margin: "0 0 3px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>— {w}</p>
             ))}
         </div>
         <div>
-          <p style={{ fontSize: 9, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: "rgba(255,255,255,0.22)", marginBottom: 6 }}>Strengths</p>
+          <p style={{ fontSize: 9, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: MUTED, marginBottom: 6 }}>Strengths</p>
           {(session.globalStrengths || []).length === 0
-            ? <p style={{ fontSize: 11, color: "rgba(255,255,255,0.15)", fontStyle: "italic" }}>None</p>
+            ? <p style={{ fontSize: 11, color: "#9AA0B8", fontStyle: "italic" }}>None</p>
             : (session.globalStrengths || []).slice(0, 2).map((s, idx) => (
-              <p key={idx} style={{ fontSize: 11, color: "rgba(255,255,255,0.45)", margin: "0 0 3px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>+ {s}</p>
+              <p key={idx} style={{ fontSize: 11, color: INK2, margin: "0 0 3px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>+ {s}</p>
             ))}
         </div>
       </div>
 
       {/* Score dots + avg */}
-      <div style={{ borderTop: "1px solid rgba(255,255,255,0.06)", paddingTop: 14, display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+      <div style={{ borderTop: `1px solid ${LINE}`, paddingTop: 14, display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
         <div style={{ display: "flex", gap: 4 }}>
           {(session.history || []).map((h, idx) => (
-            <div key={idx} style={{ width: 10, height: 10, borderRadius: "50%", background: (h?.evaluation?.score ?? 0) >= 7 ? "rgba(100,255,150,0.7)" : (h?.evaluation?.score ?? 0) >= 5 ? "rgba(255,200,80,0.7)" : "rgba(255,100,100,0.6)" }} />
+            <div key={idx} style={{ width: 10, height: 10, borderRadius: "50%", background: scoreColor(h?.evaluation?.score ?? 0) }} />
           ))}
         </div>
-        <span style={{ fontSize: 10, fontFamily: "monospace", color: "rgba(255,255,255,0.3)", textTransform: "uppercase", letterSpacing: "0.06em" }}>
+        <span style={{ fontSize: 10, fontFamily: "monospace", color: MUTED, textTransform: "uppercase", letterSpacing: "0.06em" }}>
           avg {sessionAvg}/10
         </span>
       </div>
@@ -155,7 +176,7 @@ function SessionCard({ session, index, onDelete }) {
       {(session.history || []).length > 0 && (
         <button
           onClick={() => setOpen(!open)}
-          style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, color: "rgba(255,255,255,0.4)", background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 8, padding: "7px 12px", cursor: "pointer", width: "100%", justifyContent: "center" }}
+          style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, color: ACCENT, background: ACCENT_BG, border: `1px solid ${ACCENT_LINE}`, borderRadius: 8, padding: "7px 12px", cursor: "pointer", width: "100%", justifyContent: "center", fontWeight: 600 }}
         >
           <MessageSquare size={12} />
           {open ? "Hide" : "View"} Chat Transcript
@@ -182,17 +203,25 @@ function SessionCard({ session, index, onDelete }) {
 }
 
 export default function Profile() {
-  const { userId, isLoaded } = useAuth();
+  const { userId, isLoaded, getToken } = useAuth();
   const [sessions, setSessions] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
 
   useEffect(() => {
     if (!isLoaded || !userId) return;
-    axios.get(`${getApiBase()}/interview/user/${userId}`)
-      .then(res => setSessions(res.data))
-      .catch(err => console.error(err))
+    setLoadError("");
+    getToken()
+      .then(token => axios.get(`${getApiBase()}/interview/user/${userId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      }))
+      .then(res => setSessions(Array.isArray(res.data) ? res.data : []))
+      .catch(err => {
+        console.error(err);
+        setLoadError("Could not load your history. The API may be waking up — refresh in a moment.");
+      })
       .finally(() => setLoading(false));
-  }, [userId, isLoaded]);
+  }, [userId, isLoaded, getToken]);
 
   const handleDelete = (sessionId) => {
     setSessions(prev => prev.filter(s => s.sessionId !== sessionId));
@@ -200,9 +229,9 @@ export default function Profile() {
 
   if (!isLoaded || loading) {
     return (
-      <div style={{ minHeight: "100vh", background: "#050505", display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 16, color: "#fff", fontFamily: "Inter, sans-serif" }}>
-        <Activity size={28} style={{ opacity: 0.4, animation: "pulse 1.5s ease-in-out infinite" }} />
-        <span style={{ fontFamily: "monospace", fontSize: 11, letterSpacing: "0.12em", textTransform: "uppercase", color: "rgba(255,255,255,0.3)" }}>Fetching Neural Records...</span>
+      <div style={{ minHeight: "100vh", background: BG, display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 16, color: INK, fontFamily: "Inter, sans-serif" }}>
+        <Activity size={28} style={{ color: ACCENT, opacity: 0.6, animation: "pulse 1.5s ease-in-out infinite" }} />
+        <span style={{ fontFamily: "monospace", fontSize: 11, letterSpacing: "0.12em", textTransform: "uppercase", color: MUTED }}>Fetching your records...</span>
         <style>{`@keyframes pulse { 0%,100%{opacity:.4} 50%{opacity:.9} }`}</style>
       </div>
     );
@@ -210,8 +239,8 @@ export default function Profile() {
 
   if (!userId) {
     return (
-      <div style={{ minHeight: "100vh", background: "#050505", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontFamily: "Inter, sans-serif" }}>
-        <p>Unauthorized. <Link href="/" style={{ color: "rgba(255,255,255,0.5)" }}>Go back</Link></p>
+      <div style={{ minHeight: "100vh", background: BG, display: "flex", alignItems: "center", justifyContent: "center", color: INK, fontFamily: "Inter, sans-serif" }}>
+        <p>Sign in required. <Link href="/" style={{ color: ACCENT }}>Go back</Link></p>
       </div>
     );
   }
@@ -237,13 +266,13 @@ export default function Profile() {
     .map(([text, count]) => ({ text: text.length > 22 ? text.slice(0, 22) + "…" : text, count }));
 
   return (
-    <div style={{ minHeight: "100vh", background: "#050505", color: "#fff", fontFamily: "Inter, sans-serif", padding: "0 0 60px" }}>
-      <nav style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "20px 40px", borderBottom: "1px solid rgba(255,255,255,0.06)", background: "rgba(5,5,5,0.8)", backdropFilter: "blur(20px)", position: "sticky", top: 0, zIndex: 50 }}>
-        <button onClick={() => window.location.href = "/"} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, fontWeight: 600, color: "rgba(255,255,255,0.6)", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 10, padding: "8px 16px", cursor: "pointer", letterSpacing: "0.06em", textTransform: "uppercase" }}>
+    <div style={{ minHeight: "100vh", background: BG, color: INK, fontFamily: "Inter, sans-serif", padding: "0 0 60px" }}>
+      <nav style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "20px 40px", borderBottom: `1px solid ${LINE}`, background: "rgba(251,250,247,0.85)", backdropFilter: "blur(20px)", position: "sticky", top: 0, zIndex: 50 }}>
+        <button onClick={() => window.location.href = "/"} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, fontWeight: 600, color: INK2, background: PAPER, border: `1px solid ${LINE}`, borderRadius: 10, padding: "8px 16px", cursor: "pointer", letterSpacing: "0.06em", textTransform: "uppercase" }}>
           <ArrowLeft size={13} /> Back to NEXUS.AI
         </button>
         <div style={{ display: "flex", gap: 16, alignItems: "center" }}>
-          <button onClick={() => window.location.href = "/mentor"} style={{ fontSize: 11, color: "rgba(255,255,255,0.45)", fontFamily: "monospace", background: "none", border: "none", cursor: "pointer" }}>Mentor →</button>
+          <button onClick={() => window.location.href = "/mentor"} style={{ fontSize: 11, color: MUTED, fontFamily: "monospace", background: "none", border: "none", cursor: "pointer" }}>Mentor →</button>
           <UserButton />
         </div>
       </nav>
@@ -252,13 +281,19 @@ export default function Profile() {
         {/* Header */}
         <div style={{ marginBottom: 40 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 8 }}>
-            <Database size={22} color="rgba(255,255,255,0.5)" />
-            <h1 style={{ fontSize: 28, fontWeight: 900, margin: 0, letterSpacing: "-0.02em" }}>Interview History</h1>
+            <Database size={22} color={ACCENT} />
+            <h1 style={{ fontSize: 28, fontWeight: 900, margin: 0, letterSpacing: "-0.02em", color: INK }}>Interview History</h1>
           </div>
-          <p style={{ fontSize: 12, color: "rgba(255,255,255,0.28)", fontFamily: "monospace" }}>
+          <p style={{ fontSize: 12, color: MUTED, fontFamily: "monospace" }}>
             All sessions saved · click any card to read the full chat
           </p>
         </div>
+
+        {loadError && (
+          <div style={{ ...panel, padding: "14px 18px", marginBottom: 24, borderColor: "#F3C0C2", background: "#FDF3F3" }}>
+            <span style={{ fontSize: 13, color: BAD }}>{loadError}</span>
+          </div>
+        )}
 
         {/* Stats */}
         <div className="profile-stats-grid" style={{ gap: 16, marginBottom: 40 }}>
@@ -268,10 +303,10 @@ export default function Profile() {
             { icon: <BrainCircuit size={20} />, label: "Peak Difficulty", value: highestDiff },
           ].map(({ icon, label, value }) => (
             <div key={label} style={{ ...panel, padding: "24px 28px", display: "flex", alignItems: "center", gap: 20 }}>
-              <div style={{ width: 48, height: 48, borderRadius: 14, background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", display: "flex", alignItems: "center", justifyContent: "center", color: "rgba(255,255,255,0.6)" }}>{icon}</div>
+              <div style={{ width: 48, height: 48, borderRadius: 14, background: ACCENT_BG, border: `1px solid ${ACCENT_LINE}`, display: "flex", alignItems: "center", justifyContent: "center", color: ACCENT }}>{icon}</div>
               <div>
-                <p style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", color: "rgba(255,255,255,0.28)", marginBottom: 4 }}>{label}</p>
-                <p style={{ fontSize: 28, fontWeight: 900, margin: 0 }}>{value}</p>
+                <p style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", color: MUTED, marginBottom: 4 }}>{label}</p>
+                <p style={{ fontSize: 28, fontWeight: 900, margin: 0, color: INK }}>{value}</p>
               </div>
             </div>
           ))}
@@ -283,16 +318,16 @@ export default function Profile() {
             {/* Score Trend */}
             <div style={{ ...panel, padding: "24px" }}>
               <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 20 }}>
-                <TrendingUp size={14} color="rgba(255,255,255,0.4)" />
-                <span style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", color: "rgba(255,255,255,0.28)" }}>Score Trend</span>
+                <TrendingUp size={14} color={ACCENT} />
+                <span style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", color: MUTED }}>Score Trend</span>
               </div>
               <ResponsiveContainer width="100%" height={160}>
                 <LineChart data={scoreChartData} margin={{ top: 4, right: 8, bottom: 4, left: -20 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
-                  <XAxis dataKey="session" tick={{ fill: "rgba(255,255,255,0.3)", fontSize: 10 }} axisLine={false} tickLine={false} />
-                  <YAxis domain={[0, 10]} tick={{ fill: "rgba(255,255,255,0.3)", fontSize: 10 }} axisLine={false} tickLine={false} />
-                  <Tooltip contentStyle={{ background: "#111", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, fontSize: 11 }} labelStyle={{ color: "rgba(255,255,255,0.5)" }} itemStyle={{ color: "#fff" }} />
-                  <Line type="monotone" dataKey="score" stroke="rgba(255,255,255,0.7)" strokeWidth={2} dot={{ fill: "#fff", r: 3 }} activeDot={{ r: 5 }} />
+                  <CartesianGrid strokeDasharray="3 3" stroke="#ECEBFE" />
+                  <XAxis dataKey="session" tick={{ fill: MUTED, fontSize: 10 }} axisLine={false} tickLine={false} />
+                  <YAxis domain={[0, 10]} tick={{ fill: MUTED, fontSize: 10 }} axisLine={false} tickLine={false} />
+                  <Tooltip contentStyle={{ background: PAPER, border: `1px solid ${LINE}`, borderRadius: 8, fontSize: 11, color: INK }} labelStyle={{ color: MUTED }} itemStyle={{ color: INK }} />
+                  <Line type="monotone" dataKey="score" stroke={ACCENT} strokeWidth={2} dot={{ fill: ACCENT, r: 3 }} activeDot={{ r: 5 }} />
                 </LineChart>
               </ResponsiveContainer>
             </div>
@@ -300,19 +335,19 @@ export default function Profile() {
             {/* Weakness Frequency */}
             <div style={{ ...panel, padding: "24px" }}>
               <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 20 }}>
-                <BarChart3 size={14} color="rgba(255,255,255,0.4)" />
-                <span style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", color: "rgba(255,255,255,0.28)" }}>Top Weaknesses</span>
+                <BarChart3 size={14} color={ACCENT} />
+                <span style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", color: MUTED }}>Top Weaknesses</span>
               </div>
               {weaknessChartData.length === 0
-                ? <p style={{ fontSize: 12, color: "rgba(255,255,255,0.2)", fontStyle: "italic", textAlign: "center", paddingTop: 40 }}>No weaknesses recorded yet</p>
+                ? <p style={{ fontSize: 12, color: "#9AA0B8", fontStyle: "italic", textAlign: "center", paddingTop: 40 }}>No weaknesses recorded yet</p>
                 : (
                   <ResponsiveContainer width="100%" height={160}>
                     <BarChart data={weaknessChartData} layout="vertical" margin={{ top: 0, right: 8, bottom: 0, left: 4 }}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" horizontal={false} />
-                      <XAxis type="number" tick={{ fill: "rgba(255,255,255,0.3)", fontSize: 10 }} axisLine={false} tickLine={false} />
-                      <YAxis type="category" dataKey="text" tick={{ fill: "rgba(255,255,255,0.4)", fontSize: 9 }} axisLine={false} tickLine={false} width={90} />
-                      <Tooltip contentStyle={{ background: "#111", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, fontSize: 11 }} itemStyle={{ color: "#fff" }} />
-                      <Bar dataKey="count" fill="rgba(255,255,255,0.15)" radius={[0, 4, 4, 0]} />
+                      <CartesianGrid strokeDasharray="3 3" stroke="#ECEBFE" horizontal={false} />
+                      <XAxis type="number" tick={{ fill: MUTED, fontSize: 10 }} axisLine={false} tickLine={false} />
+                      <YAxis type="category" dataKey="text" tick={{ fill: INK2, fontSize: 9 }} axisLine={false} tickLine={false} width={90} />
+                      <Tooltip contentStyle={{ background: PAPER, border: `1px solid ${LINE}`, borderRadius: 8, fontSize: 11, color: INK }} itemStyle={{ color: INK }} />
+                      <Bar dataKey="count" fill={ACCENT} radius={[0, 4, 4, 0]} />
                     </BarChart>
                   </ResponsiveContainer>
                 )}
@@ -320,14 +355,15 @@ export default function Profile() {
           </div>
         )}
 
-        <h3 style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", color: "rgba(255,255,255,0.3)", borderBottom: "1px solid rgba(255,255,255,0.07)", paddingBottom: 12, marginBottom: 24 }}>
+        <h3 style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", color: MUTED, borderBottom: `1px solid ${LINE}`, paddingBottom: 12, marginBottom: 24 }}>
           Simulation History
         </h3>
 
         {sessions.length === 0 ? (
           <div style={{ ...panel, padding: 64, textAlign: "center" }}>
-            <Rocket size={36} style={{ color: "rgba(255,255,255,0.15)", margin: "0 auto 16px" }} />
-            <p style={{ fontSize: 13, color: "rgba(255,255,255,0.25)", fontFamily: "monospace" }}>No simulations yet. Complete an interview to see your history here.</p>
+            <Rocket size={36} style={{ color: ACCENT, opacity: 0.4, margin: "0 auto 16px" }} />
+            <p style={{ fontSize: 13, color: MUTED, fontFamily: "monospace" }}>No simulations yet. Complete an interview to see your history here.</p>
+            <button onClick={() => window.location.href = "/"} style={{ marginTop: 20, padding: "10px 24px", borderRadius: 10, background: ACCENT, color: "#fff", border: "none", fontWeight: 700, fontSize: 12, cursor: "pointer" }}>Start an interview</button>
           </div>
         ) : (
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(340px, 1fr))", gap: 16 }}>

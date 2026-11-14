@@ -9,7 +9,7 @@ import {
   Download, Key, X, Volume2, Video,
 } from "lucide-react";
 import { getApiBase } from "@/lib/api";
-import { APP_NAME, loadGeminiKey, saveGeminiKey } from "@/lib/brand";
+import { APP_NAME, loadGeminiKey, saveGeminiKey, loadResumeContext, saveResumeContext } from "@/lib/brand";
 import { toast } from "@/lib/toast";
 import { speak as ttsSpeak, cancelSpeech, loadElevenLabsKey, saveElevenLabsKey, unlockSpeech, primeInterviewerVoice, setVoiceSpeed, loadVoiceSpeed, playAck, warmupAcks, flushSpokenSentences } from "@/lib/tts";
 import { interviewerTitle, interviewerPromptRole, toneLabel } from "@/lib/persona";
@@ -153,8 +153,8 @@ function ChatMessage({ msg, onPlay }) {
             </div>
             {ev.time_complexity && (
               <div style={{ display: "flex", gap: 10, marginBottom: 6 }}>
-                <span style={{ fontSize: 10, color: "#596079", fontFamily: "monospace" }}>T: {ev.time_complexity}</span>
-                <span style={{ fontSize: 10, color: "#596079", fontFamily: "monospace" }}>S: {ev.space_complexity}</span>
+                <span style={{ fontSize: 10, color: "#596079", fontFamily: "monospace" }}>Est. T: {ev.time_complexity}</span>
+                <span style={{ fontSize: 10, color: "#596079", fontFamily: "monospace" }}>Est. S: {ev.space_complexity}</span>
               </div>
             )}
             <p style={{ margin: "0 0 8px", fontSize: 11, color: "#596079", fontStyle: "italic" }}>{ev.suggestions}</p>
@@ -179,12 +179,16 @@ function ChatMessage({ msg, onPlay }) {
 }
 
 // ─── SSE streaming helper ─────────────────────────────────────────────────────
-async function readSSEStream(url, body, onChunk, onSession, onDone, onError) {
+async function readSSEStream(url, body, onChunk, onSession, onDone, onError, getToken) {
   let response;
   try {
+    const token = getToken ? await getToken() : null;
     response = await fetch(url, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
       body: JSON.stringify(body),
     });
   } catch (e) {
@@ -220,7 +224,7 @@ async function readSSEStream(url, body, onChunk, onSession, onDone, onError) {
 
 // ─── Main ─────────────────────────────────────────────────────────────────────
 export default function Home() {
-  const { userId, isLoaded } = useAuth();
+  const { userId, isLoaded, getToken } = useAuth();
   const { user } = useUser();
 
   const [stage, setStage] = useState("landing");
@@ -239,7 +243,10 @@ export default function Home() {
 
   const [sessionId, setSessionId] = useState("");
   const [userApiKey, setUserApiKey] = useState("");
+  const [freeQuota, setFreeQuota] = useState(null); // { limit, used, remaining, platformKeyAvailable }
   const [resumeContext, setResumeContext] = useState(null);
+  const [resumeFile, setResumeFile] = useState(null);
+  const [isParsingResume, setIsParsingResume] = useState(false);
 
   const getCandidateName = () =>
     resumeContext?.name ||
@@ -261,6 +268,8 @@ export default function Home() {
     if (userId) {
       const saved = loadGeminiKey();
       if (saved) setUserApiKey(saved);
+      const savedResume = loadResumeContext();
+      if (savedResume) setResumeContext(savedResume);
       const el = loadElevenLabsKey(); if (el) setElevenLabsKey(el);
       const dg = loadDeepgramKey();   if (dg) setDeepgramKey(dg);
       const drillRaw = sessionStorage.getItem("nexus_drill_context");
@@ -325,6 +334,7 @@ export default function Home() {
   const timerRef = useRef(null);
   const submitLock = useRef(false);
   const busyRef = useRef(false);
+  const submitAnswerRef = useRef(null);
   const lastScoreRef = useRef(5);
   const spokenUpTo = useRef(0);
 
@@ -441,7 +451,7 @@ export default function Home() {
       setTimeLeft(p => {
         if (p <= 1) {
           clearInterval(timerRef.current);
-          if (!busyRef.current) submitAnswer("Time up.");
+          if (!busyRef.current) submitAnswerRef.current?.("Time up.");
           return 0;
         }
         if (p === 30) playTone(440, 0.18);          // 30s warning — low tick
@@ -456,6 +466,77 @@ export default function Home() {
 
   const apiBase = getApiBase();
   const isCodingRound = interviewType === "Coding Round";
+  const freeInterviewAvailable = Boolean(freeQuota?.platformKeyAvailable && freeQuota.remaining > 0);
+  const canUseAi = Boolean(userApiKey) || freeInterviewAvailable;
+
+  // ─── Free interviews on the platform key ─────────────────────────────────
+  const refreshQuota = async () => {
+    try {
+      const token = await getToken();
+      const res = await axios.get(`${apiBase}/interview/quota`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        timeout: 70000,
+      });
+      setFreeQuota(res.data);
+    } catch {
+      setFreeQuota(null);
+    }
+  };
+
+  useEffect(() => {
+    if (!isLoaded || !userId) return;
+    refreshQuota();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isLoaded, userId]);
+
+  // ─── Resume upload (setup screen) ────────────────────────────────────────
+  const parseResume = async (file, key) => {
+    setIsParsingResume(true);
+    try {
+      const form = new FormData();
+      form.append("resume", file);
+      if (key) form.append("userApiKey", key);
+      const token = await getToken();
+      const res = await axios.post(`${apiBase}/resume/parse`, form, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        timeout: 60000,
+      });
+      if (res.data.context) {
+        setResumeContext(res.data.context);
+        saveResumeContext(res.data.context);
+      } else {
+        setResumeFile(null);
+        toast.error("Couldn't read details from that resume. Check your API key or try another PDF.");
+      }
+    } catch (e) {
+      setResumeFile(null);
+      toast.error(e.response?.data?.error || "Could not read that resume. Try again.");
+    } finally {
+      setIsParsingResume(false);
+    }
+  };
+
+  const handleResumeUpload = (file) => {
+    if (!file) return;
+    if (file.type !== "application/pdf") { toast.error("Please choose a PDF file."); return; }
+    if (file.size > 5 * 1024 * 1024) { toast.error("Resume must be 5 MB or smaller."); return; }
+    setResumeFile(file);
+    setResumeContext(null);
+    saveResumeContext(null);
+    if (canUseAi) parseResume(file, userApiKey);
+  };
+
+  const handleResumeClear = () => {
+    setResumeFile(null);
+    setResumeContext(null);
+    saveResumeContext(null);
+  };
+
+  // A file picked before AI access existed gets read as soon as a key or free quota arrives.
+  useEffect(() => {
+    if (resumeFile && canUseAi && !resumeContext && !isParsingResume) parseResume(resumeFile, userApiKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [canUseAi, userApiKey, resumeFile]);
 
   // ─── Config modal open/close ─────────────────────────────────────────────
   const openConfig = (type) => {
@@ -571,7 +652,7 @@ export default function Home() {
     try {
       await readSSEStream(
         `${apiBase}/interview/stream-start`,
-        { role: ctx, clerkId: userId, userApiKey, resumeContext: resumeContext || undefined, isCodingRound, candidateName: getCandidateName() || undefined, drillFocus: drillMode?.weakness || undefined, language },
+        { role: ctx, userApiKey, resumeContext: resumeContext || undefined, isCodingRound, candidateName: getCandidateName() || undefined, drillFocus: drillMode?.weakness || undefined, language },
         (chunk) => {
           accum += chunk;
           setStreamingText(accum);
@@ -605,7 +686,8 @@ export default function Home() {
           toast.error(failMsg);
           setStartError(failMsg);
           setStage("setup");
-        }
+        },
+        getToken
       );
       if (!gotSession && !failMsg) {
         failMsg = "Could not start the interview. Make sure the backend is running, then try again.";
@@ -620,6 +702,7 @@ export default function Home() {
     } finally {
       setIsTyping(false);
       busyRef.current = false;
+      if (!userApiKey) refreshQuota();
     }
   };
 
@@ -668,17 +751,21 @@ export default function Home() {
     const answeredCount = hist.filter((m) => m.role === "user").length;
     const isLastTurn = answeredCount >= 5;
 
-    const runEval = () => axios.post(
-      `${apiBase}/interview/evaluate`,
-      { sessionId, answer: userAns, userApiKey, isCodingRound, language },
-      { timeout: 90000 }
-    ).then((res) => {
-      applyEval(res.data);
-      return res.data;
-    }).catch((err) => {
-      console.warn("evaluate:", err?.response?.data?.error || err.message);
-      return null;
-    });
+    const runEval = async () => {
+      try {
+        const token = await getToken();
+        const res = await axios.post(
+          `${apiBase}/interview/evaluate`,
+          { sessionId, answer: userAns, userApiKey, isCodingRound, language },
+          { timeout: 90000, headers: { Authorization: `Bearer ${token}` } }
+        );
+        applyEval(res.data);
+        return res.data;
+      } catch (err) {
+        console.warn("evaluate:", err?.response?.data?.error || err.message);
+        return null;
+      }
+    };
 
     try {
       if (isLastTurn) {
@@ -732,7 +819,8 @@ export default function Home() {
           setChatHistory((prev) => [...prev, { role: "ai", text: fullQuestion, isFollowUp: true }]);
           if (!isCodingRound) speakStream(fullQuestion, { final: true });
         },
-        (err) => { toast.error(err || "Could not get next question. Try again."); }
+        (err) => { toast.error(err || "Could not get next question. Try again."); },
+        getToken
       );
     } catch (err) {
       const isNetwork = !err.response;
@@ -749,6 +837,9 @@ export default function Home() {
       submitLock.current = false;
     }
   };
+
+  // Keep the timer effect pointed at the latest submitAnswer (avoids stale closures).
+  useEffect(() => { submitAnswerRef.current = submitAnswer; });
 
   // ─── Render ────────────────────────────────────────────────────────────────
   const showLanding = stage === "landing";
@@ -774,6 +865,7 @@ export default function Home() {
           userId={userId}
           userApiKey={userApiKey}
           setUserApiKey={setUserApiKey}
+          freeQuota={freeQuota}
           role={role}
           setRole={setRole}
           company={company}
@@ -796,6 +888,11 @@ export default function Home() {
           startError={startError}
           language={language}
           setLanguage={setLanguage}
+          resumeFile={resumeFile}
+          resumeContext={resumeContext}
+          isParsingResume={isParsingResume}
+          onResumeUpload={handleResumeUpload}
+          onResumeClear={handleResumeClear}
         />
       )}
       {/* ── Change Key Modal ── */}
@@ -811,8 +908,10 @@ export default function Home() {
               <button onClick={() => setShowKeyModal(false)} style={{ position: "absolute", top: 14, right: 14, background: "none", border: "none", color: "#9AA0B8", cursor: "pointer", padding: 4 }}>
                 <X size={16} />
               </button>
-              <h2 style={{ fontSize: 20, fontWeight: 800, margin: "0 0 6px", color: "#0E1A3A" }}>Change Gemini Key</h2>
-              <p style={{ fontSize: 12, color: "#596079", margin: "0 0 24px", lineHeight: 1.6 }}>Your current key will be replaced for this session.</p>
+              <h2 style={{ fontSize: 20, fontWeight: 800, margin: "0 0 6px", color: "#0E1A3A" }}>{userApiKey ? "Change Gemini Key" : "Add Your Gemini Key"}</h2>
+              <p style={{ fontSize: 12, color: "#596079", margin: "0 0 24px", lineHeight: 1.6 }}>
+                {userApiKey ? "Your current key will be replaced for this session." : "Your own key gives unlimited interviews. It stays in this browser tab."}
+              </p>
               <input type="password" value={apiKeyInput}
                 onChange={e => { setApiKeyInput(e.target.value); setApiKeyError(""); }}
                 onKeyDown={e => e.key === "Enter" && confirmNewKey()}
@@ -853,12 +952,10 @@ export default function Home() {
             <>
               <button onClick={() => window.location.href = "/mentor"} className="nav-txt-btn">Mentor</button>
               <button onClick={() => window.location.href = "/profile"} className="nav-txt-btn">History</button>
-              {userApiKey && (
-                <button onClick={handleChangeKey} title="Change Gemini API Key"
-                  style={{ background: "#fff", border: "1px solid #E3E5F1", borderRadius: 8, padding: "7px 10px", color: "#596079", cursor: "pointer", display: "flex", alignItems: "center" }}>
-                  <Key size={13} />
-                </button>
-              )}
+              <button onClick={handleChangeKey} title={userApiKey ? "Change Gemini API Key" : "Add your Gemini API Key"}
+                style={{ background: "#fff", border: "1px solid #E3E5F1", borderRadius: 8, padding: "7px 10px", color: "#596079", cursor: "pointer", display: "flex", alignItems: "center" }}>
+                <Key size={13} />
+              </button>
               <UserButton />
             </>
           )}
@@ -931,7 +1028,7 @@ export default function Home() {
                   {interviewType === "Technical" && "FORMAT: 1. Concept  2. Implementation  3. Edge Cases"}
                   {interviewType === "System Design" && "FORMAT: 1. Requirements  2. Architecture  3. Bottlenecks"}
                   {interviewType === "HR & Culture" && "STAR: Situation → Task → Action → Result"}
-                  {interviewType === "Coding Round" && "Write your solution then hit Submit — AI grades correctness, time & space complexity"}
+                  {interviewType === "Coding Round" && "Write your solution then hit Submit — AI reviews it (code is not executed) and estimates time & space complexity"}
                 </div>
 
                 {/* Input */}

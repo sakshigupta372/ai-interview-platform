@@ -2,17 +2,21 @@ const express = require("express");
 const router = express.Router();
 const sessionService = require("../services/session");
 const { runCoachAgent } = require("../ai/coach");
-const { hasUsableApiKey, mapGeminiError } = require("../ai/llm");
+const { getUserKey, mapGeminiError } = require("../ai/llm");
+const { requireAuth } = require("../middleware/auth");
 
 // POST /coach/analyze/:clerkId
 // Body: { userApiKey, targetRole? }
 // Returns: { stats, coaching }
-router.post("/analyze/:clerkId", async (req, res) => {
-  const { clerkId } = req.params;
+router.post("/analyze/:clerkId", requireAuth, async (req, res) => {
+  if (req.params.clerkId !== req.auth.userId) {
+    return res.status(403).json({ error: "Forbidden" });
+  }
+  const clerkId = req.auth.userId;
   const { userApiKey, targetRole } = req.body;
 
-  if (!hasUsableApiKey(userApiKey)) {
-    return res.status(400).json({ error: "Gemini API key required." });
+  if (!getUserKey(userApiKey)) {
+    return res.status(400).json({ error: "Add your own Gemini API key to use the AI coach." });
   }
 
   try {

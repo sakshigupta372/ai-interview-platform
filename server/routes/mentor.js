@@ -3,11 +3,16 @@ const router = express.Router();
 
 const mentorService = require("../services/mentor");
 const { generateCareerPlan } = require("../ai/mentor");
+const { requireAuth } = require("../middleware/auth");
+const { getUserKey } = require("../ai/llm");
 
 // GET profile: aggregated stats + latest cached roadmap
-router.get("/:clerkId", async (req, res) => {
+router.get("/:clerkId", requireAuth, async (req, res) => {
+  if (req.params.clerkId !== req.auth.userId) {
+    return res.status(403).json({ error: "Forbidden" });
+  }
   try {
-    const { stats, latestRoadmap } = await mentorService.getMentorProfile(req.params.clerkId);
+    const { stats, latestRoadmap } = await mentorService.getMentorProfile(req.auth.userId);
     res.json({
       stats,
       roadmap: latestRoadmap,
@@ -20,11 +25,12 @@ router.get("/:clerkId", async (req, res) => {
 });
 
 // POST generate: AI weakness analysis + roadmap + projects
-router.post("/generate", async (req, res) => {
+router.post("/generate", requireAuth, async (req, res) => {
   try {
-    const { clerkId, userApiKey, targetRole } = req.body;
-    if (!clerkId) {
-      return res.status(400).json({ error: "clerkId is required" });
+    const clerkId = req.auth.userId;
+    const { userApiKey, targetRole } = req.body;
+    if (!getUserKey(userApiKey)) {
+      return res.status(400).json({ error: "Add your own Gemini API key to generate a career plan." });
     }
 
     const { stats } = await mentorService.getMentorProfile(clerkId);

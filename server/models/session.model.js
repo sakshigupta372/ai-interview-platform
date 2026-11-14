@@ -4,6 +4,7 @@ const SessionSchema = new mongoose.Schema({
   sessionId: { type: String, required: true, unique: true },
   clerkId: { type: String, default: null }, // Link to Clerk Auth
   role: { type: String, required: true },
+  usesPlatformKey: { type: Boolean, default: false }, // Free interview billed to the server's Gemini key
   currentQuestion: { type: String },
   currentDifficulty: { type: String, default: "Medium" }, // Dynamic difficulty tracking
   globalStrengths: [{ type: String }],

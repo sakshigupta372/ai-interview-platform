@@ -33,10 +33,17 @@ function extractResponseText(response) {
   return String(text || "").trim();
 }
 
-function hasUsableApiKey(userApiKey) {
-  const userKey = userApiKey?.trim();
-  const platformKey = process.env.GEMINI_API_KEY?.trim();
-  return (userKey && userKey.length > 10) || (platformKey && platformKey.length > 10);
+// The caller's own key, or null. Routes decide separately whether a null may
+// fall back to the platform key (free-interview quota) — getAI() alone would
+// silently bill every request to GEMINI_API_KEY.
+function getUserKey(userApiKey) {
+  const key = typeof userApiKey === "string" ? userApiKey.trim() : "";
+  return key.length > 10 ? key : null;
+}
+
+function platformKeyAvailable() {
+  const key = process.env.GEMINI_API_KEY?.trim();
+  return Boolean(key && key.length > 10);
 }
 
 // Order matters: try the models that have actually been serving reliably first.
@@ -208,7 +215,8 @@ module.exports = {
   getFirstName,
   stripNamePlaceholders,
   extractResponseText,
-  hasUsableApiKey,
+  getUserKey,
+  platformKeyAvailable,
   mapGeminiError,
   generateContentWithFallback,
 };

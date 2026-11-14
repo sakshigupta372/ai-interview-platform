@@ -5,10 +5,17 @@ services:
     rootDir: server
     buildCommand: npm install
     startCommand: npm start
+    healthCheckPath: /healthz
     envVars:
       - key: NODE_ENV
         value: production
       - key: FRONTEND_URL
-        value: https://ai-interview-platform-nr7v.vercel.app
+        value: https://ai-interview-platform-one-wine.vercel.app
       - key: MONGO_URI
         sync: false
+      - key: CLERK_SECRET_KEY
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: FREE_INTERVIEW_LIMIT
+        value: "3"

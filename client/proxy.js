@@ -1,9 +1,8 @@
-import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server';
+import { clerkMiddleware } from '@clerk/nextjs/server';
 
-// By default, clerkMiddleware does not protect any routes automatically in v5, 
-// so you don't actually need complex regex rules unless you strictly protect them.
-// We will leave the homepage open, and just use Clerk components there!
-
+// Next 16 renamed the `middleware` file convention to `proxy`.
+// clerkMiddleware() does not protect routes by default; the homepage stays
+// public and pages use Clerk components / the backend verifies tokens.
 export default clerkMiddleware();
 
 export const config = {

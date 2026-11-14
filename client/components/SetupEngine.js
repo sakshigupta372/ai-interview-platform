@@ -77,6 +77,7 @@ export default function SetupEngine({
   userId,
   userApiKey,
   setUserApiKey,
+  freeQuota,
   role, setRole,
   company, setCompany,
   persona, setPersona,
@@ -90,7 +91,13 @@ export default function SetupEngine({
   onKeySaved,
   startError,
   language, setLanguage,
+  resumeFile, resumeContext, isParsingResume, onResumeUpload, onResumeClear,
 }) {
+  const freeLeft = freeQuota?.platformKeyAvailable ? freeQuota.remaining : 0;
+  const freeUsedUp = Boolean(freeQuota?.platformKeyAvailable && freeQuota.remaining <= 0);
+  const canStartFree = !userApiKey && freeLeft > 0;
+  const canStart = Boolean(userApiKey) || canStartFree;
+
   const submitKey = () => {
     if (apiKeyInput.trim().length < 10) {
       setApiKeyError("That doesn't look like a valid API key.");
@@ -105,7 +112,7 @@ export default function SetupEngine({
   const handleStart = () => {
     if (isTyping) return;
     if (!userId) return;
-    if (!userApiKey) {
+    if (!canStart) {
       onNeedKey?.();
       return;
     }
@@ -150,7 +157,11 @@ export default function SetupEngine({
           <div className="nx-engine">
             <div className="nx-engine-icon"><KeyRound size={22} /></div>
             <h1>Connect Your AI</h1>
-            <p className="sub">Paste a free Gemini API key to power the simulation.</p>
+            <p className="sub">
+              {freeUsedUp
+                ? `You've used your ${freeQuota.limit} free interviews. Paste a free Gemini API key to keep practising - unlimited.`
+                : "Paste a free Gemini API key for unlimited interviews."}
+            </p>
             <input
               className="nx-input"
               type="password"
@@ -172,6 +183,13 @@ export default function SetupEngine({
               </a>
               {" "}— never stored on our servers.
             </p>
+            {canStartFree && (
+              <p className="nx-engine-note">
+                <button type="button" className="nx-engine-link" onClick={onKeySaved}>
+                  Skip - use a free interview ({freeLeft} left)
+                </button>
+              </p>
+            )}
           </div>
         ) : (
           <div className="nx-engine">
@@ -237,6 +255,30 @@ export default function SetupEngine({
               </select>
             </div>
 
+            <div className="nx-resume">
+              <label className={resumeContext ? "nx-resume-pick on" : "nx-resume-pick"}>
+                <input
+                  type="file"
+                  accept="application/pdf,.pdf"
+                  hidden
+                  onChange={(e) => { onResumeUpload?.(e.target.files?.[0]); e.target.value = ""; }}
+                />
+                {isParsingResume ? <Loader2 size={15} style={{ animation: "spin 1s linear infinite" }} />
+                  : <b aria-hidden="true">{resumeContext ? "✓" : "+"}</b>}
+                <span>
+                  {isParsingResume ? "Reading your resume..."
+                    : resumeContext ? `Resume loaded${resumeContext.recent_role ? ` - ${resumeContext.recent_role}` : ""}`
+                    : resumeFile ? `${resumeFile.name} - will be read once you have an API key or free interview`
+                    : "Upload resume PDF - questions tailored to you"}
+                </span>
+              </label>
+              {(resumeFile || resumeContext) && !isParsingResume && (
+                <button type="button" className="nx-resume-x" onClick={onResumeClear} aria-label="Remove resume">
+                  ✕
+                </button>
+              )}
+            </div>
+
             <input
               className="nx-input"
               type="text"
@@ -259,13 +301,20 @@ export default function SetupEngine({
                 type="button"
                 className="nx-start"
                 onClick={handleStart}
-                disabled={isTyping || (Boolean(userApiKey) && !role.trim())}
+                disabled={isTyping || (canStart && !role.trim())}
               >
                 {isTyping ? <Loader2 size={16} style={{ animation: "spin 1s linear infinite" }} /> :
-                  !userApiKey ? <><KeyRound size={14} /> Add API key</> :
+                  !canStart ? <><KeyRound size={14} /> Add API key</> :
                   drillMode ? <>Start drill <Rocket size={14} /></> :
                   <>Start Simulation <Rocket size={14} /></>}
               </button>
+            )}
+
+            {isLoaded && userId && canStartFree && (
+              <p className="nx-engine-note">
+                Free interview - {freeLeft} of {freeQuota.limit} left, no API key needed.{" "}
+                <button type="button" className="nx-engine-link" onClick={onNeedKey}>Use my own key</button>
+              </p>
             )}
           </div>
         )}

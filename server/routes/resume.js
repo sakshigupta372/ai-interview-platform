@@ -1,8 +1,11 @@
 const express = require("express");
 const router = express.Router();
 const multer = require("multer");
-const pdfParse = require("pdf-parse");
+const { extractPdfText } = require("../services/pdfText");
 const { extractResumeContext } = require("../ai/resumeParser");
+const { getUserKey, platformKeyAvailable } = require("../ai/llm");
+const { requireAuth } = require("../middleware/auth");
+const userService = require("../services/user");
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -13,12 +16,29 @@ const upload = multer({
   }
 });
 
-router.post("/parse", upload.single("resume"), async (req, res) => {
+router.post("/parse", requireAuth, (req, res, next) => {
+  upload.single("resume")(req, res, (err) => {
+    if (!err) return next();
+    const tooBig = err.code === "LIMIT_FILE_SIZE";
+    res.status(400).json({ error: tooBig ? "Resume must be 5 MB or smaller." : err.message || "Upload failed." });
+  });
+}, async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: "No file uploaded" });
-    const data = await pdfParse(req.file.buffer);
-    const userApiKey = req.body.userApiKey || null;
-    const context = await extractResumeContext(data.text, userApiKey);
+
+    // Without their own key, users may read a resume on the platform key only
+    // while they still have free interviews to spend it on.
+    const ownKey = getUserKey(req.body.userApiKey);
+    if (!ownKey) {
+      const quota = platformKeyAvailable() ? await userService.getQuota(req.auth.userId) : null;
+      if (!quota || quota.remaining <= 0) {
+        return res.status(400).json({ error: "Add your Gemini API key to read your resume." });
+      }
+    }
+
+    const text = await extractPdfText(req.file.buffer);
+    if (!text) return res.status(422).json({ error: "Could not read any text from this PDF." });
+    const context = await extractResumeContext(text, ownKey);
     res.json({ context });
   } catch (err) {
     console.error("Resume route error:", err.message);

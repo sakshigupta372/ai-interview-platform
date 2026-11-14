@@ -1,13 +1,25 @@
 const express = require("express");
 const router = express.Router();
 
-const { generateQuestion, streamQuestionChunks, hasUsableApiKey, mapGeminiError } = require("../ai/llm");
+const { streamQuestionChunks, getUserKey, platformKeyAvailable, mapGeminiError } = require("../ai/llm");
 const { evaluateAnswer } = require("../ai/evaluate");
 const { generateFollowUp, streamFollowUpChunks } = require("../ai/followUp");
 const { synthesizeSpeech } = require("../ai/tts");
 const sessionService = require("../services/session");
+const userService = require("../services/user");
+const { requireAuth, loadOwnedSession } = require("../middleware/auth");
 
 const MAX_QUESTIONS = 5;
+const KEY_REQUIRED = "Gemini API key required.";
+
+// Returns the key to pass to the AI helpers (null = platform key), or undefined
+// when this session is not allowed to use the platform key.
+function sessionApiKey(session, userApiKey) {
+  const ownKey = getUserKey(userApiKey);
+  if (ownKey) return ownKey;
+  if (session.usesPlatformKey && platformKeyAvailable()) return null;
+  return undefined;
+}
 
 function sseSetup(res) {
   res.setHeader("Content-Type", "text/event-stream");
@@ -36,21 +48,52 @@ router.post("/speak", async (req, res) => {
   }
 });
 
-// 1. START — streaming version (creates session + streams opening question)
-router.post("/stream-start", async (req, res) => {
-  const { role, clerkId, userApiKey, resumeContext, isCodingRound, candidateName, drillFocus, language } = req.body;
-  if (!role) return res.status(400).json({ error: "Role is required" });
-  if (!hasUsableApiKey(userApiKey)) return res.status(400).json({ error: "Gemini API key required." });
+// FREE QUOTA — how many interviews this user can still run on the platform key
+router.get("/quota", requireAuth, async (req, res) => {
+  try {
+    const quota = await userService.getQuota(req.auth.userId);
+    res.json({ ...quota, platformKeyAvailable: platformKeyAvailable() });
+  } catch (error) {
+    console.error("quota error:", error);
+    res.status(500).json({ error: "Could not load your free interviews." });
+  }
+});
 
-  console.log("stream-start", { role: String(role).slice(0, 80), coding: !!isCodingRound, hasKey: Boolean(userApiKey) });
+// 1. START — streaming version (creates session + streams opening question)
+router.post("/stream-start", requireAuth, async (req, res) => {
+  const clerkId = req.auth.userId;
+  const { role, userApiKey, resumeContext, isCodingRound, candidateName, drillFocus, language } = req.body;
+  if (!role) return res.status(400).json({ error: "Role is required" });
+
+  const ownKey = getUserKey(userApiKey);
+  let usesPlatformKey = false;
+  if (!ownKey) {
+    if (!platformKeyAvailable()) return res.status(400).json({ error: KEY_REQUIRED });
+    let grant;
+    try {
+      grant = await userService.consumeFreeInterview(clerkId);
+    } catch (error) {
+      console.error("free quota error:", error);
+      return res.status(500).json({ error: "Could not check your free interviews. Try again." });
+    }
+    if (!grant.granted) {
+      return res.status(402).json({
+        code: "FREE_LIMIT_REACHED",
+        error: `You've used your ${grant.limit} free interviews. Add your own free Gemini key to keep practising.`,
+      });
+    }
+    usesPlatformKey = true;
+  }
+
+  console.log("stream-start", { role: String(role).slice(0, 80), coding: !!isCodingRound, ownKey: Boolean(ownKey) });
   sseSetup(res);
 
+  let fullQuestion = "";
   try {
-    const session = await sessionService.createSession(role, clerkId);
+    const session = await sessionService.createSession(role, clerkId, { usesPlatformKey });
     sseWrite(res, { type: "session", sessionId: session.sessionId });
 
-    let fullQuestion = "";
-    const stream = streamQuestionChunks(role, userApiKey, resumeContext || null, !!isCodingRound, candidateName || null, drillFocus || null, language || "English");
+    const stream = streamQuestionChunks(role, ownKey, resumeContext || null, !!isCodingRound, candidateName || null, drillFocus || null, language || "English");
     for await (const chunk of stream) {
       fullQuestion += chunk;
       sseWrite(res, { type: "chunk", text: chunk });
@@ -61,6 +104,9 @@ router.post("/stream-start", async (req, res) => {
     res.end();
   } catch (error) {
     console.error("stream-start error:", error);
+    if (usesPlatformKey && !fullQuestion) {
+      await userService.refundFreeInterview(clerkId).catch((e) => console.error("free quota refund error:", e));
+    }
     const mapped = mapGeminiError(error);
     sseWrite(res, { type: "error", error: mapped.error });
     res.end();
@@ -68,19 +114,21 @@ router.post("/stream-start", async (req, res) => {
 });
 
 // 2a. EVALUATE — scores the answer and saves to DB, returns evaluation + isComplete
-router.post("/evaluate", async (req, res) => {
+router.post("/evaluate", requireAuth, async (req, res) => {
   try {
     const { sessionId, answer, userApiKey, isCodingRound, language } = req.body;
     if (!sessionId || !answer) return res.status(400).json({ error: "sessionId and answer are required" });
 
-    const session = await sessionService.getSession(sessionId);
-    if (!session) return res.status(404).json({ error: "Session not found" });
+    const session = await loadOwnedSession(sessionService, req, res, sessionId);
+    if (!session) return;
     if (session.status === "completed") return res.status(400).json({ error: "Session already completed." });
+    const apiKey = sessionApiKey(session, userApiKey);
+    if (apiKey === undefined) return res.status(400).json({ error: KEY_REQUIRED });
 
     const questionTheyAreAnswering = session.currentQuestion;
     const currentDifficulty = session.currentDifficulty || "Medium";
 
-    const evaluation = await evaluateAnswer(questionTheyAreAnswering, answer, currentDifficulty, userApiKey, !!isCodingRound, language || "English");
+    const evaluation = await evaluateAnswer(questionTheyAreAnswering, answer, currentDifficulty, apiKey, !!isCodingRound, language || "English");
 
     await sessionService.updateSessionData(
       sessionId,
@@ -107,16 +155,24 @@ router.post("/evaluate", async (req, res) => {
 });
 
 // 2b. STREAM-NEXT — streams the follow-up question after evaluate
-router.post("/stream-next", async (req, res) => {
+router.post("/stream-next", requireAuth, async (req, res) => {
   const { sessionId, answer, userApiKey, resumeContext, isCodingRound, candidateName, evaluationScore, nextDifficulty, language } = req.body;
   if (!sessionId) return res.status(400).json({ error: "sessionId required" });
+
+  let session;
+  try {
+    session = await loadOwnedSession(sessionService, req, res, sessionId);
+  } catch (error) {
+    console.error("stream-next lookup error:", error);
+    return res.status(500).json({ error: "Database fetch failed" });
+  }
+  if (!session) return;
+  const apiKey = sessionApiKey(session, userApiKey);
+  if (apiKey === undefined) return res.status(400).json({ error: KEY_REQUIRED });
 
   sseSetup(res);
 
   try {
-    const session = await sessionService.getSession(sessionId);
-    if (!session) { sseWrite(res, { type: "error", error: "Session not found" }); return res.end(); }
-
     let fullQuestion = "";
     const stream = streamFollowUpChunks(
       session.role,
@@ -124,7 +180,7 @@ router.post("/stream-next", async (req, res) => {
       answer || "",
       evaluationScore ?? 5,
       nextDifficulty || session.currentDifficulty || "Medium",
-      userApiKey,
+      apiKey,
       !!isCodingRound,
       resumeContext || null,
       candidateName || null,
@@ -148,18 +204,20 @@ router.post("/stream-next", async (req, res) => {
 });
 
 // 2. LEGACY — SUBMIT ANSWER, EVALUATE & NEXT (kept for backward compat)
-router.post("/answer", async (req, res) => {
+router.post("/answer", requireAuth, async (req, res) => {
   try {
     const { sessionId, answer, userApiKey, resumeContext, isCodingRound, candidateName } = req.body;
     if (!sessionId || !answer) return res.status(400).json({ error: "sessionId and answer are required" });
 
-    const session = await sessionService.getSession(sessionId);
-    if (!session) return res.status(404).json({ error: "Session not found in DB" });
+    const session = await loadOwnedSession(sessionService, req, res, sessionId);
+    if (!session) return;
     if (session.status === "completed") return res.status(400).json({ error: "This interview session is already completed." });
+    const apiKey = sessionApiKey(session, userApiKey);
+    if (apiKey === undefined) return res.status(400).json({ error: KEY_REQUIRED });
 
     const questionTheyAreAnswering = session.currentQuestion;
     const currentDifficulty = session.currentDifficulty || "Medium";
-    const evaluation = await evaluateAnswer(questionTheyAreAnswering, answer, currentDifficulty, userApiKey, !!isCodingRound);
+    const evaluation = await evaluateAnswer(questionTheyAreAnswering, answer, currentDifficulty, apiKey, !!isCodingRound);
 
     await sessionService.updateSessionData(
       sessionId,
@@ -175,7 +233,7 @@ router.post("/answer", async (req, res) => {
 
     const nextQuestion = await generateFollowUp(
       updatedSession.role, questionTheyAreAnswering, answer,
-      evaluation.score, updatedSession.currentDifficulty, userApiKey,
+      evaluation.score, updatedSession.currentDifficulty, apiKey,
       !!isCodingRound, resumeContext || null, candidateName || null
     );
     await sessionService.updateCurrentQuestion(sessionId, nextQuestion);
@@ -194,10 +252,10 @@ router.post("/answer", async (req, res) => {
 });
 
 // 3. GET SESSION
-router.get("/session/:id", async (req, res) => {
+router.get("/session/:id", requireAuth, async (req, res) => {
   try {
-    const session = await sessionService.getSession(req.params.id);
-    if (!session) return res.status(404).json({ error: "Session not found" });
+    const session = await loadOwnedSession(sessionService, req, res, req.params.id);
+    if (!session) return;
     res.json(session);
   } catch (error) {
     res.status(500).json({ error: "Database fetch failed" });
@@ -205,9 +263,12 @@ router.get("/session/:id", async (req, res) => {
 });
 
 // 4. GET ALL SESSIONS BY USER
-router.get("/user/:clerkId", async (req, res) => {
+router.get("/user/:clerkId", requireAuth, async (req, res) => {
+  if (req.params.clerkId !== req.auth.userId) {
+    return res.status(403).json({ error: "Forbidden" });
+  }
   try {
-    const sessions = await sessionService.getSessionsByUser(req.params.clerkId);
+    const sessions = await sessionService.getSessionsByUser(req.auth.userId);
     res.json(sessions);
   } catch (error) {
     console.error(error);
@@ -216,8 +277,10 @@ router.get("/user/:clerkId", async (req, res) => {
 });
 
 // 5. DELETE SESSION
-router.delete("/session/:id", async (req, res) => {
+router.delete("/session/:id", requireAuth, async (req, res) => {
   try {
+    const owned = await loadOwnedSession(sessionService, req, res, req.params.id);
+    if (!owned) return;
     const deleted = await sessionService.deleteSession(req.params.id);
     if (!deleted) return res.status(404).json({ error: "Session not found" });
     res.json({ success: true });

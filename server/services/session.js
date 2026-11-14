@@ -1,12 +1,13 @@
 const { v4: uuidv4 } = require("uuid");
 const SessionModel = require("../models/session.model");
 
-async function createSession(role, clerkId = null) {
+async function createSession(role, clerkId = null, { usesPlatformKey = false } = {}) {
   const sessionId = uuidv4();
   const session = new SessionModel({
     sessionId,
     clerkId,
     role,
+    usesPlatformKey,
     history: [],
     status: "active",
     currentDifficulty: "Medium",

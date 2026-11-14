@@ -199,6 +199,11 @@ html:has(.nx-setup), body:has(.nx-setup) {
   font-size: 12px; color: var(--muted);
 }
 .nx-engine-note a { color: var(--indigo); font-weight: 600; }
+.nx-engine-link {
+  background: none; border: none; padding: 0;
+  font: inherit; color: var(--indigo); font-weight: 600;
+  cursor: pointer; text-decoration: underline; text-underline-offset: 2px;
+}
 .nx-engine-error {
   margin: 0 0 12px;
   padding: 10px 12px;
@@ -234,3 +239,27 @@ html:has(.nx-setup), body:has(.nx-setup) {
   .nx-types { flex-wrap: wrap; border-radius: 14px; }
   .nx-types button { flex: 1 1 46%; }
 }
+
+/* Resume upload row (sits above the role input) */
+.nx-resume { display: flex; align-items: stretch; gap: 8px; margin-bottom: 12px; }
+.nx-resume-pick {
+  flex: 1; min-width: 0;
+  display: flex; align-items: center; gap: 10px;
+  padding: 11px 14px;
+  background: var(--bg);
+  border: 1px dashed #C9CCE0;
+  border-radius: 12px;
+  color: var(--muted);
+  font-size: 13px;
+  cursor: pointer;
+}
+.nx-resume-pick span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nx-resume-pick:hover { border-color: var(--indigo); color: var(--ink); }
+.nx-resume-pick.on { border-style: solid; border-color: var(--indigo); color: var(--ink); background: #F5F4FF; }
+.nx-resume-x {
+  flex: none; width: 40px;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--bg); border: 1px solid #E3E5F1; border-radius: 12px;
+  color: var(--muted); cursor: pointer;
+}
+.nx-resume-x:hover { color: var(--ink); border-color: #C9CCE0; }

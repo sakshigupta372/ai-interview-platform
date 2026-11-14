@@ -26,7 +26,7 @@ Users bring their own Gemini API key (BYOK), upload their resume for personalise
 - Upload your **PDF resume** on the setup screen
 - Gemini extracts your role, skills, experience, and projects
 - Every question is tailored to your actual background — not just the job title
-- Resume is parsed client-side and never stored on the server
+- The PDF is read once and never stored. The extracted summary (skills, projects) is kept in your browser so questions stay personalised
 
 ### 💻 Coding Round Mode
 - Select **Coding Round** as the interview type
@@ -190,6 +190,8 @@ NEXT_PUBLIC_API_URL=                 # https://your-backend.onrender.com
 MONGO_URI=       # MongoDB Atlas connection string
 PORT=5000
 FRONTEND_URL=    # https://your-app.vercel.app
+CLERK_SECRET_KEY=   # same Clerk app as the frontend; the API verifies session tokens with it
+ALLOWED_ORIGINS=    # optional, comma-separated extra browser origins (custom domain, previews)
 ```
 
 ---
@@ -221,6 +223,7 @@ FRONTEND_URL=    # https://your-app.vercel.app
    - `MONGO_URI`
    - `PORT=5000`
    - `FRONTEND_URL` → your Vercel app URL
+   - `CLERK_SECRET_KEY` → from the Clerk dashboard (required, the API rejects authenticated calls without it)
 
 ### Clerk Setup
 - Go to **Clerk Dashboard → your app → Domains**

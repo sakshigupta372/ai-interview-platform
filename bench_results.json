@@ -1,0 +1,298 @@
+{
+  "measured_at": "2026-10-24T08:02:02.772240+00:00",
+  "model": "gemini-2.5-flash",
+  "environment": {
+    "base_url": "http://127.0.0.1:5000",
+    "health_http_status": 200,
+    "health_error": null,
+    "health_body": "NEXUS.AI API + MongoDB Running...",
+    "api_key_present": false,
+    "langgraph_present_in_repo": false,
+    "difficulty_is_separate_llm_step": false,
+    "model_hardcoded_in_repo": "gemini-2.5-flash"
+  },
+  "requested_turns": 20,
+  "completed_ok_turns": 0,
+  "error_count": 20,
+  "retry_count_from_client": 0,
+  "retry_count_note": "Server-side Gemini 429 retries are not exposed on the HTTP response. Client issued no retries.",
+  "latency_ms": {
+    "full_turn": {
+      "n": 0,
+      "p50": null,
+      "p95": null
+    },
+    "question_or_follow_up_generation": {
+      "n": 0,
+      "p50": null,
+      "p95": null
+    },
+    "question_generation_stream_start_only": {
+      "n": 0,
+      "p50": null,
+      "p95": null
+    },
+    "follow_up_generation_stream_next_only": {
+      "n": 0,
+      "p50": null,
+      "p95": null
+    },
+    "evaluate_and_difficulty": {
+      "n": 0,
+      "p50": null,
+      "p95": null
+    },
+    "difficulty_decision_alone": {
+      "n": 0,
+      "p50": null,
+      "p95": null,
+      "reason": "suggested_next_difficulty is a field inside evaluateAnswer, not a separate agent step."
+    }
+  },
+  "turns": [
+    {
+      "turn": 1,
+      "session_id": null,
+      "ok": false,
+      "error": "Gemini API key required.",
+      "http_status_question": 400,
+      "http_status_evaluate": null,
+      "latency_ms": {
+        "question_generation": 1.65
+      }
+    },
+    {
+      "turn": 2,
+      "session_id": null,
+      "ok": false,
+      "error": "Gemini API key required.",
+      "http_status_question": 400,
+      "http_status_evaluate": null,
+      "latency_ms": {
+        "question_generation": 1.39
+      }
+    },
+    {
+      "turn": 3,
+      "session_id": null,
+      "ok": false,
+      "error": "Gemini API key required.",
+      "http_status_question": 400,
+      "http_status_evaluate": null,
+      "latency_ms": {
+        "question_generation": 1.74
+      }
+    },
+    {
+      "turn": 4,
+      "session_id": null,
+      "ok": false,
+      "error": "Gemini API key required.",
+      "http_status_question": 400,
+      "http_status_evaluate": null,
+      "latency_ms": {
+        "question_generation": 25.97
+      }
+    },
+    {
+      "turn": 5,
+      "session_id": null,
+      "ok": false,
+      "error": "Gemini API key required.",
+      "http_status_question": 400,
+      "http_status_evaluate": null,
+      "latency_ms": {
+        "question_generation": 1.71
+      }
+    },
+    {
+      "turn": 6,
+      "session_id": null,
+      "ok": false,
+      "error": "Gemini API key required.",
+      "http_status_question": 400,
+      "http_status_evaluate": null,
+      "latency_ms": {
+        "question_generation": 1.56
+      }
+    },
+    {
+      "turn": 7,
+      "session_id": null,
+      "ok": false,
+      "error": "Gemini API key required.",
+      "http_status_question": 400,
+      "http_status_evaluate": null,
+      "latency_ms": {
+        "question_generation": 11.54
+      }
+    },
+    {
+      "turn": 8,
+      "session_id": null,
+      "ok": false,
+      "error": "Gemini API key required.",
+      "http_status_question": 400,
+      "http_status_evaluate": null,
+      "latency_ms": {
+        "question_generation": 15.25
+      }
+    },
+    {
+      "turn": 9,
+      "session_id": null,
+      "ok": false,
+      "error": "Gemini API key required.",
+      "http_status_question": 400,
+      "http_status_evaluate": null,
+      "latency_ms": {
+        "question_generation": 14.79
+      }
+    },
+    {
+      "turn": 10,
+      "session_id": null,
+      "ok": false,
+      "error": "Gemini API key required.",
+      "http_status_question": 400,
+      "http_status_evaluate": null,
+      "latency_ms": {
+        "question_generation": 16.34
+      }
+    },
+    {
+      "turn": 11,
+      "session_id": null,
+      "ok": false,
+      "error": "Gemini API key required.",
+      "http_status_question": 400,
+      "http_status_evaluate": null,
+      "latency_ms": {
+        "question_generation": 15.62
+      }
+    },
+    {
+      "turn": 12,
+      "session_id": null,
+      "ok": false,
+      "error": "Gemini API key required.",
+      "http_status_question": 400,
+      "http_status_evaluate": null,
+      "latency_ms": {
+        "question_generation": 14.96
+      }
+    },
+    {
+      "turn": 13,
+      "session_id": null,
+      "ok": false,
+      "error": "Gemini API key required.",
+      "http_status_question": 400,
+      "http_status_evaluate": null,
+      "latency_ms": {
+        "question_generation": 15.87
+      }
+    },
+    {
+      "turn": 14,
+      "session_id": null,
+      "ok": false,
+      "error": "Gemini API key required.",
+      "http_status_question": 400,
+      "http_status_evaluate": null,
+      "latency_ms": {
+        "question_generation": 14.88
+      }
+    },
+    {
+      "turn": 15,
+      "session_id": null,
+      "ok": false,
+      "error": "Gemini API key required.",
+      "http_status_question": 400,
+      "http_status_evaluate": null,
+      "latency_ms": {
+        "question_generation": 15.68
+      }
+    },
+    {
+      "turn": 16,
+      "session_id": null,
+      "ok": false,
+      "error": "Gemini API key required.",
+      "http_status_question": 400,
+      "http_status_evaluate": null,
+      "latency_ms": {
+        "question_generation": 1.52
+      }
+    },
+    {
+      "turn": 17,
+      "session_id": null,
+      "ok": false,
+      "error": "Gemini API key required.",
+      "http_status_question": 400,
+      "http_status_evaluate": null,
+      "latency_ms": {
+        "question_generation": 12.38
+      }
+    },
+    {
+      "turn": 18,
+      "session_id": null,
+      "ok": false,
+      "error": "Gemini API key required.",
+      "http_status_question": 400,
+      "http_status_evaluate": null,
+      "latency_ms": {
+        "question_generation": 15.57
+      }
+    },
+    {
+      "turn": 19,
+      "session_id": null,
+      "ok": false,
+      "error": "Gemini API key required.",
+      "http_status_question": 400,
+      "http_status_evaluate": null,
+      "latency_ms": {
+        "question_generation": 15.22
+      }
+    },
+    {
+      "turn": 20,
+      "session_id": null,
+      "ok": false,
+      "error": "Gemini API key required.",
+      "http_status_question": 400,
+      "http_status_evaluate": null,
+      "latency_ms": {
+        "question_generation": 16.24
+      }
+    }
+  ],
+  "created_session_ids": [],
+  "cleaned_up": true,
+  "db_snapshot_local": {
+    "measured_at": "2026-10-24T08:00:36.059Z",
+    "mongo": "mongodb://127.0.0.1:27017/ai-interview-platform",
+    "collection": "sessions",
+    "total_sessions": 5,
+    "completed_sessions": 0,
+    "active_sessions": 5,
+    "unique_users_by_clerkId": 1,
+    "sessions_with_null_or_empty_clerkId": 4,
+    "total_history_items": 12,
+    "average_questions_per_session": 2.4,
+    "sessions_with_any_difficulty_adjustment": 3,
+    "pct_sessions_adjusted_of_all": 60.0,
+    "sessions_with_at_least_one_up": 1,
+    "sessions_with_at_least_one_down": 3,
+    "total_up_events": 1,
+    "total_down_events": 3
+  },
+  "db_snapshot_atlas": {
+    "ok": false,
+    "error": "querySrv ENOTFOUND _mongodb._tcp.cluster0.0dr4nqv.mongodb.net"
+  }
+}
