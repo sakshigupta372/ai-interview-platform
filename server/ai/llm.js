@@ -47,17 +47,18 @@ function platformKeyAvailable() {
 }
 
 // Order matters: try the models that have actually been serving reliably first.
-// gemini-3.8-flash (newest) has been returning 503 under load, so it sits lower
-// as a fallback rather than first. 3.5-flash is GA/stable; 2.5-flash is the
-// broadest-access safety net. Keep the newer models in the list so we still
-// upgrade automatically once they stabilise.
+// Measured directly against production traffic: 2.5-flash responds in ~1s
+// consistently. The 3.x line is multiple seconds to 20-30s and wildly
+// inconsistent under load (3.8-flash routinely 503s), so they're kept as
+// fallbacks rather than the primary — we still try them so we pick up
+// improvements automatically once they stabilise.
 const GEMINI_MODELS = [
-  "gemini-3.5-flash",       // GA, stable, fast — primary
-  "gemini-3.6-flash",
-  "gemini-3.5-flash-lite",
+  "gemini-2.5-flash",       // fastest + most reliable — primary
   "gemini-3.1-flash-lite",
-  "gemini-3.8-flash",       // newest but flaky (503s) — fallback, not first
-  "gemini-2.5-flash",       // broadest access — last resort
+  "gemini-3.5-flash",
+  "gemini-3.5-flash-lite",
+  "gemini-3.6-flash",
+  "gemini-3.8-flash",       // newest but flaky (503s under load) — last resort
 ];
 
 function isRetryableGeminiError(error) {
