@@ -343,7 +343,7 @@ export default function LandingPage({ onStart, userId, isLoaded, userApiKey, onC
       <section className="hero hero-compact" id="top">
         <div className="wrap hero-grid">
           <div className="hero-copy">
-            <h1 className="disp in d1">AI mock interviews for placements.</h1>
+            <h1 className="disp in d1">AI mock interviews for <span className="grad">placements.</span></h1>
             <p className="lead in d2">Practice technical, HR, system design, and coding rounds with an AI interviewer. Get scored on every answer — then know what to fix before the real one.</p>
             <div className="ctas in d3">
               <button type="button" className="btn btn-p" onClick={() => start()}>
